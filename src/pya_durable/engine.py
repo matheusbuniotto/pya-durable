@@ -1,0 +1,365 @@
+import asyncio
+import json
+import logging
+import uuid
+from dataclasses import dataclass, field
+from typing import Any, AsyncIterator, Generic, Sequence, TypeVar
+
+from pydantic_ai import Agent
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelMessagesTypeAdapter,
+    ToolCallPart,
+)
+
+from pya_durable.models import (
+    TaskStatus,
+    TranscriptEntryKind,
+    TranscriptEntryRecord,
+    utc_now_iso,
+)
+from pya_durable.storage import AioSqliteStorage
+
+logger = logging.getLogger("pya_durable.engine")
+
+TOutput = TypeVar("TOutput")
+
+
+@dataclass(frozen=True)
+class StepNodeCommit:
+    node_name: str
+    entry_id: str
+    kind: TranscriptEntryKind
+    parent_entry_id: str | None
+    node_data: Any
+
+
+@dataclass(frozen=True)
+class TurnResult(Generic[TOutput]):
+    output: TOutput
+    leaf_entry_id: str
+    all_messages: list[ModelMessage]
+    token_usage: dict[str, int]
+
+
+class DurableStepEngine:
+    def __init__(self, storage: AioSqliteStorage) -> None:
+        self.storage = storage
+
+    def _extract_node_payload(
+        self, node: Any, prompt_text: str
+    ) -> tuple[TranscriptEntryKind, str]:
+        node_name = type(node).__name__
+
+        if node_name == "UserPromptNode":
+            return (
+                TranscriptEntryKind.USER,
+                json.dumps({"prompt": getattr(node, "user_prompt", prompt_text)}),
+            )
+
+        if node_name == "ModelRequestNode":
+            req = getattr(node, "request", None)
+            if req is not None:
+                dumped = ModelMessagesTypeAdapter.dump_json([req]).decode()
+                return TranscriptEntryKind.MODEL_REQUEST, dumped
+            return TranscriptEntryKind.MODEL_REQUEST, json.dumps({"type": "request"})
+
+        if node_name == "CallToolsNode":
+            resp = getattr(node, "model_response", None)
+            if resp is not None:
+                dumped = ModelMessagesTypeAdapter.dump_json([resp]).decode()
+                parts = getattr(resp, "parts", [])
+                has_tool_call = any(isinstance(p, ToolCallPart) for p in parts)
+                kind = (
+                    TranscriptEntryKind.TOOL_CALL
+                    if has_tool_call
+                    else TranscriptEntryKind.MODEL_RESPONSE
+                )
+                return kind, dumped
+            return TranscriptEntryKind.MODEL_RESPONSE, json.dumps({"type": "response"})
+
+        if node_name == "End":
+            data = getattr(node, "data", None)
+            output = getattr(data, "output", "")
+            if hasattr(output, "model_dump_json"):
+                payload = output.model_dump_json()
+            elif isinstance(output, (dict, list, int, float, bool)):
+                payload = json.dumps(output)
+            else:
+                payload = json.dumps({"output": str(output)})
+            return TranscriptEntryKind.SYSTEM, payload
+
+        return TranscriptEntryKind.SYSTEM, json.dumps({"node": node_name})
+
+    async def iter_turn(
+        self,
+        agent: Agent[Any, TOutput],
+        user_prompt: str,
+        conversation_id: str,
+        task_id: str,
+        parent_entry_id: str | None = None,
+        message_history: Sequence[ModelMessage] | None = None,
+        deps: Any = None,
+    ) -> AsyncIterator[StepNodeCommit]:
+        if user_prompt is None or not user_prompt.strip():
+            raise ValueError("Prompt cannot be empty")
+
+        current_parent_id = parent_entry_id
+        cumulative_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+
+        await self.storage.update_task_state(
+            task_id=task_id,
+            status=TaskStatus.RUNNING,
+            phase="iterating_nodes",
+            state_json=json.dumps({"phase": "starting", "usage": cumulative_usage}),
+            checkpoint_json=current_parent_id,
+        )
+
+        try:
+            async with agent.iter(
+                user_prompt,
+                message_history=message_history,
+                deps=deps,
+            ) as runner:
+                async for node in runner:
+                    node_name = type(node).__name__
+                    entry_id = f"entry-{uuid.uuid4().hex[:16]}"
+                    kind, payload = self._extract_node_payload(node, user_prompt)
+
+                    if hasattr(node, "model_response") and hasattr(node.model_response, "usage"):
+                        u = node.model_response.usage
+                        if u is not None:
+                            in_tok = getattr(u, "input_tokens", 0) or 0
+                            out_tok = getattr(u, "output_tokens", 0) or 0
+                            cumulative_usage["input_tokens"] += in_tok
+                            cumulative_usage["output_tokens"] += out_tok
+                            cumulative_usage["total_tokens"] += (in_tok + out_tok)
+
+                    entry = TranscriptEntryRecord(
+                        entry_id=entry_id,
+                        conversation_id=conversation_id,
+                        parent_entry_id=current_parent_id,
+                        kind=kind,
+                        message_json=payload,
+                    )
+
+                    async with self.storage.transaction():
+                        await self.storage.insert_transcript_entry(entry)
+                        state = {
+                            "last_node": node_name,
+                            "entry_id": entry_id,
+                            "usage": cumulative_usage,
+                        }
+                        await self.storage.update_task_state(
+                            task_id=task_id,
+                            status=TaskStatus.RUNNING,
+                            phase=node_name,
+                            state_json=json.dumps(state),
+                            checkpoint_json=entry_id,
+                        )
+
+                    logger.info("Node %s committed with entry id %s", node_name, entry_id)
+                    current_parent_id = entry_id
+
+                    yield StepNodeCommit(
+                        node_name=node_name,
+                        entry_id=entry_id,
+                        kind=kind,
+                        parent_entry_id=entry.parent_entry_id,
+                        node_data=node,
+                    )
+
+                final_output = runner.result.output
+                await self.storage.update_task_state(
+                    task_id=task_id,
+                    status=TaskStatus.COMPLETED,
+                    phase="completed",
+                    state_json=json.dumps({
+                        "output": str(final_output) if not hasattr(final_output, "model_dump_json") else final_output.model_dump_json(),
+                        "usage": cumulative_usage,
+                    }),
+                    checkpoint_json=current_parent_id,
+                )
+
+        except Exception as exc:
+            await self.storage.update_task_state(
+                task_id=task_id,
+                status=TaskStatus.FAILED,
+                phase="failed",
+                state_json=json.dumps({
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                    "usage": cumulative_usage,
+                }),
+                checkpoint_json=current_parent_id,
+            )
+            raise
+
+    async def run_turn(
+        self,
+        agent: Agent[Any, TOutput],
+        user_prompt: str,
+        conversation_id: str,
+        task_id: str,
+        parent_entry_id: str | None = None,
+        message_history: Sequence[ModelMessage] | None = None,
+        deps: Any = None,
+        max_steps: int | None = None,
+        on_node: Any = None,
+    ) -> TurnResult[TOutput]:
+        if user_prompt is None or not user_prompt.strip():
+            raise ValueError("Prompt cannot be empty")
+
+        current_parent_id = parent_entry_id
+        cumulative_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        last_node_name = "init"
+        extracted_output: Any = None
+        stopped_early = False
+
+        await self.storage.update_task_state(
+            task_id=task_id,
+            status=TaskStatus.RUNNING,
+            phase="iterating_nodes",
+            state_json=json.dumps({"phase": "starting", "usage": cumulative_usage}),
+            checkpoint_json=current_parent_id,
+        )
+
+        try:
+            async with agent.iter(
+                user_prompt,
+                message_history=message_history,
+                deps=deps,
+            ) as runner:
+                step_count = 0
+                async for node in runner:
+                    step_count += 1
+                    node_name = type(node).__name__
+                    last_node_name = node_name
+                    entry_id = f"entry-{uuid.uuid4().hex[:16]}"
+                    kind, payload = self._extract_node_payload(node, user_prompt)
+
+                    if hasattr(node, "model_response") and hasattr(node.model_response, "usage"):
+                        u = node.model_response.usage
+                        if u is not None:
+                            in_tok = getattr(u, "input_tokens", 0) or 0
+                            out_tok = getattr(u, "output_tokens", 0) or 0
+                            cumulative_usage["input_tokens"] += in_tok
+                            cumulative_usage["output_tokens"] += out_tok
+                            cumulative_usage["total_tokens"] += (in_tok + out_tok)
+
+                    entry = TranscriptEntryRecord(
+                        entry_id=entry_id,
+                        conversation_id=conversation_id,
+                        parent_entry_id=current_parent_id,
+                        kind=kind,
+                        message_json=payload,
+                    )
+
+                    async with self.storage.transaction():
+                        await self.storage.insert_transcript_entry(entry)
+                        state = {
+                            "last_node": node_name,
+                            "entry_id": entry_id,
+                            "usage": cumulative_usage,
+                        }
+                        await self.storage.update_task_state(
+                            task_id=task_id,
+                            status=TaskStatus.RUNNING,
+                            phase=node_name,
+                            state_json=json.dumps(state),
+                            checkpoint_json=entry_id,
+                        )
+
+                    logger.info("Node %s committed with entry id %s", node_name, entry_id)
+                    current_parent_id = entry_id
+
+                    commit = StepNodeCommit(
+                        node_name=node_name,
+                        entry_id=entry_id,
+                        kind=kind,
+                        parent_entry_id=entry.parent_entry_id,
+                        node_data=node,
+                    )
+
+                    if node_name == "End" and hasattr(node, "data"):
+                        extracted_output = node.data.output
+
+                    if on_node is not None:
+                        res = on_node(commit)
+                        if asyncio.iscoroutine(res):
+                            res = await res
+                        if res is False:
+                            stopped_early = True
+                            break
+
+                    if max_steps is not None and step_count >= max_steps:
+                        stopped_early = True
+                        break
+
+                if stopped_early:
+                    await self.storage.update_task_state(
+                        task_id=task_id,
+                        status=TaskStatus.RUNNING,
+                        phase="interrupted",
+                        state_json=json.dumps({
+                            "interrupted": True,
+                            "last_node": last_node_name,
+                            "usage": cumulative_usage,
+                        }),
+                        checkpoint_json=current_parent_id,
+                    )
+                else:
+                    if extracted_output is None and hasattr(runner, "result") and runner.result is not None:
+                        extracted_output = runner.result.output
+
+                    out_str = (
+                        extracted_output.model_dump_json()
+                        if hasattr(extracted_output, "model_dump_json")
+                        else str(extracted_output)
+                    )
+                    await self.storage.update_task_state(
+                        task_id=task_id,
+                        status=TaskStatus.COMPLETED,
+                        phase="completed",
+                        state_json=json.dumps({
+                            "output": out_str,
+                            "usage": cumulative_usage,
+                        }),
+                        checkpoint_json=current_parent_id,
+                    )
+
+        except Exception as exc:
+            await self.storage.update_task_state(
+                task_id=task_id,
+                status=TaskStatus.FAILED,
+                phase="failed",
+                state_json=json.dumps({
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                    "usage": cumulative_usage,
+                }),
+                checkpoint_json=current_parent_id,
+            )
+            raise
+
+        leaf_id = current_parent_id or ""
+        ancestor_entries = await self.storage.get_ancestor_entries(leaf_id)
+        messages: list[ModelMessage] = []
+        for e in ancestor_entries:
+            if e.kind in (
+                TranscriptEntryKind.MODEL_REQUEST,
+                TranscriptEntryKind.MODEL_RESPONSE,
+                TranscriptEntryKind.TOOL_CALL,
+            ):
+                try:
+                    parsed = ModelMessagesTypeAdapter.validate_json(e.message_json)
+                    messages.extend(parsed)
+                except Exception:
+                    pass
+
+        return TurnResult(
+            output=extracted_output,
+            leaf_entry_id=leaf_id,
+            all_messages=messages,
+            token_usage=cumulative_usage,
+        )

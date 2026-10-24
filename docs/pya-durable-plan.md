@@ -125,52 +125,52 @@ Each live lane runs on its own virtual environment at the PR head. Drive through
 
 **Files.**
 
-- [ ] Create `src/pya_durable/engine.py`.
-- [ ] Create `src/pya_durable/harness.py`.
-- [ ] Create `tests/test_engine.py`.
+- [x] Create `src/pya_durable/engine.py`.
+- [x] Create `src/pya_durable/harness.py`.
+- [x] Create `tests/test_engine.py`.
 
 **Build.**
 
-- [ ] Implement `DurableStepEngine` driving `agent.iter` node transitions in `src/pya_durable/engine.py`.
-- [ ] Connect `UserPromptNode`, `ModelRequestNode`, `CallToolsNode`, and `End` to SQLite storage commits.
+- [x] Implement `DurableStepEngine` driving `agent.iter` node transitions in `src/pya_durable/engine.py`.
+- [x] Connect `UserPromptNode`, `ModelRequestNode`, `CallToolsNode`, and `End` to SQLite storage commits.
 
 **You see.**
 
-- [ ] Agent execution steps through nodes with each step recorded in transcript table.
-- [ ] Log outputs `Node UserPromptNode committed with entry id`.
+- [x] Agent execution steps through nodes with each step recorded in transcript table.
+- [x] Log outputs `Node UserPromptNode committed with entry id`.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Unit tests checking message serialization and node iteration in `tests/test_engine.py`. Run `uv run pytest tests/test_engine.py`.
+- [x] Unit tests checking message serialization and node iteration in `tests/test_engine.py`. Run `uv run pytest tests/test_engine.py`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run single-turn agent execution on trunk and head. If trunk lacks the feature, record that and gate agent completion and transcript persistence. Save `lane-1-single-turn.png`. Pass when prompt and answer persist to transcript table.
-- [ ] Lane 2. Multi-turn conversation continuing from previous history. Save `lane-2-multi-turn.png`. Pass when restored history matches previous turns.
-- [ ] Lane 3. Tool call node interception and argument capture. Save `lane-3-tool-intercept.png`. Pass when tool call arguments serialize accurately.
-- [ ] Lane 4. Tool return value integration back into model context. Save `lane-4-tool-return.png`. Pass when model receives tool result and produces final answer.
-- [ ] Lane 5. Final output schema extraction from End node. Save `lane-5-end-node.png`. Pass when typed output matches Pydantic response model.
-- [ ] Lane 6. Model token usage tracking into task record. Save `lane-6-usage.png`. Pass when token count matches provider response.
-- [ ] Lane 7. Empty prompt rejection at boundary. Save `lane-7-empty-prompt.png`. Pass when validation error raises before database write.
-- [ ] Lane 8. Serialization roundtrip for complex nested tool arguments. Save `lane-8-nested-args.png`. Pass when deserialized arguments match input types.
-- [ ] Lane 9. Provider rate limit error capture into task record. Save `lane-9-rate-limit.png`. Pass when error status marks task as failed with error details.
-- [ ] Lane 10. Premature generator close simulation. Save `lane-10-early-close.png`. Pass when unfinished step records partial state cleanly.
+- [x] Lane 1. Regression lane against trunk. Run single-turn agent execution on trunk and head. If trunk lacks the feature, record that and gate agent completion and transcript persistence. Save `lane-1-single-turn.png`. Pass when prompt and answer persist to transcript table.
+- [x] Lane 2. Multi-turn conversation continuing from previous history. Save `lane-2-multi-turn.png`. Pass when restored history matches previous turns.
+- [x] Lane 3. Tool call node interception and argument capture. Save `lane-3-tool-intercept.png`. Pass when tool call arguments serialize accurately.
+- [x] Lane 4. Tool return value integration back into model context. Save `lane-4-tool-return.png`. Pass when model receives tool result and produces final answer.
+- [x] Lane 5. Final output schema extraction from End node. Save `lane-5-end-node.png`. Pass when typed output matches Pydantic response model.
+- [x] Lane 6. Model token usage tracking into task record. Save `lane-6-usage.png`. Pass when token count matches provider response.
+- [x] Lane 7. Empty prompt rejection at boundary. Save `lane-7-empty-prompt.png`. Pass when validation error raises before database write.
+- [x] Lane 8. Serialization roundtrip for complex nested tool arguments. Save `lane-8-nested-args.png`. Pass when deserialized arguments match input types.
+- [x] Lane 9. Provider rate limit error capture into task record. Save `lane-9-rate-limit.png`. Pass when error status marks task as failed with error details.
+- [x] Lane 10. Premature generator close simulation. Save `lane-10-early-close.png`. Pass when unfinished step records partial state cleanly.
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Metric. Overhead added by SQLite checkpointing per model turn.
-- [ ] Probe. Measure elapsed turn duration comparing direct agent run versus durable step engine with mock model.
-- [ ] Baseline. Measure direct agent execution taking five milliseconds per mock turn.
-- [ ] Rule. Durable step engine checkpointing overhead must stay under fifteen milliseconds per turn.
+- [x] Metric. Overhead added by SQLite checkpointing per model turn.
+- [x] Probe. Measure elapsed turn duration comparing direct agent run versus durable step engine with mock model.
+- [x] Baseline. Measure direct agent execution taking five milliseconds per mock turn.
+- [x] Rule. Durable step engine checkpointing overhead must stay under fifteen milliseconds per turn.
 
 **Review gate.** None. PR-02 is not review-gated.
 
 **Merge.**
 
-- [ ] Root clean verdict at exact head SHA.
-- [ ] Bugbot triage done.
-- [ ] Rebased onto parent branch after verdict, patch-id unchanged.
-- [ ] Owner pushes branch and reports STACK-READY to root.
+- [x] Root clean verdict at exact head SHA.
+- [x] Bugbot triage done.
+- [x] Rebased onto parent branch after verdict, patch-id unchanged.
+- [x] Owner pushes branch and reports STACK-READY to root.
 
 ## Add durable tool replay and crash recovery (PR-03)
 

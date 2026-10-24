@@ -1,3 +1,5 @@
+from pya_durable.engine import DurableStepEngine, StepNodeCommit, TurnResult
+from pya_durable.harness import DurableHarness
 from pya_durable.models import (
     ConversationId,
     ConversationRecord,
@@ -25,10 +27,13 @@ __all__ = [
     "ConversationRecord",
     "DocId",
     "DurableDocRecord",
+    "DurableHarness",
+    "DurableStepEngine",
     "EntryId",
     "InvocationId",
     "ReplayPolicy",
     "RequestId",
+    "StepNodeCommit",
     "SubmissionRecord",
     "SubmissionStatus",
     "TaskId",
@@ -38,4 +43,5 @@ __all__ = [
     "ToolInvocationStatus",
     "TranscriptEntryKind",
     "TranscriptEntryRecord",
+    "TurnResult",
 ]
