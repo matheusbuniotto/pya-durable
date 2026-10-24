@@ -27,6 +27,16 @@ from pya_durable.replay import (
     set_tool_partial_output,
 )
 from pya_durable.storage import AioSqliteStorage
+from pya_durable.subagents import SubagentManager, SubagentResult
+from pya_durable.task_tree import (
+    CycleDetectedError,
+    TaskContext,
+    TaskDefinition,
+    TaskPhaseResult,
+    TaskRunner,
+    check_cycle,
+    define_task,
+)
 
 __all__ = [
     "AioSqliteStorage",
@@ -34,6 +44,7 @@ __all__ = [
     "ConversationId",
     "ConversationRecord",
     "CrashRecoveryManager",
+    "CycleDetectedError",
     "DocId",
     "DurableDocRecord",
     "DurableHarness",
@@ -44,17 +55,25 @@ __all__ = [
     "ReplayPolicy",
     "RequestId",
     "StepNodeCommit",
+    "SubagentManager",
+    "SubagentResult",
     "SubmissionRecord",
     "SubmissionStatus",
+    "TaskContext",
+    "TaskDefinition",
     "TaskId",
+    "TaskPhaseResult",
     "TaskRecord",
     "TaskRecoveryResult",
+    "TaskRunner",
     "TaskStatus",
     "ToolInvocationRecord",
     "ToolInvocationStatus",
     "TranscriptEntryKind",
     "TranscriptEntryRecord",
     "TurnResult",
+    "check_cycle",
+    "define_task",
     "durable_tool",
     "set_tool_partial_output",
 ]

@@ -231,54 +231,54 @@ Each live lane runs on its own virtual environment at the PR head. Drive through
 
 **Files.**
 
-- [ ] Create `src/pya_durable/task_tree.py`.
-- [ ] Create `src/pya_durable/subagents.py`.
-- [ ] Create `tests/test_tasks.py`.
+- [x] Create `src/pya_durable/task_tree.py`.
+- [x] Create `src/pya_durable/subagents.py`.
+- [x] Create `tests/test_tasks.py`.
 
 **Build.**
 
-- [ ] Implement `define_task` state machine runner with phase transitions in `src/pya_durable/task_tree.py`.
-- [ ] Implement subagent conversation creation with task ownership in `src/pya_durable/subagents.py`.
-- [ ] Implement recursive bottom-up task cancellation.
+- [x] Implement `define_task` state machine runner with phase transitions in `src/pya_durable/task_tree.py`.
+- [x] Implement subagent conversation creation with task ownership in `src/pya_durable/subagents.py`.
+- [x] Implement recursive bottom-up task cancellation.
 
 **You see.**
 
-- [ ] Parent task creates child task and awaits result.
-- [ ] Canceling parent task cascades abort to all child tasks and subagents.
-- [ ] Log outputs `Aborted child task id due to parent cancellation`.
+- [x] Parent task creates child task and awaits result.
+- [x] Canceling parent task cascades abort to all child tasks and subagents.
+- [x] Log outputs `Aborted child task id due to parent cancellation`.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Unit tests for hierarchical ownership, phase checkpoints, and abort cascades in `tests/test_tasks.py`. Run `uv run pytest tests/test_tasks.py`.
+- [x] Unit tests for hierarchical ownership, phase checkpoints, and abort cascades in `tests/test_tasks.py`. Run `uv run pytest tests/test_tasks.py`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run hierarchical task with subagent on trunk and head. If trunk lacks the feature, record that and gate subagent lifecycle and result return. Save `lane-1-subagent-lifecycle.png`. Pass when subagent conversation completes and yields result to parent.
-- [ ] Lane 2. Multi-tier task ownership tree with depth of three. Save `lane-2-depth-three.png`. Pass when root task coordinates leaf children.
-- [ ] Lane 3. Bottom-up abort cascade on parent cancel. Save `lane-3-abort-cascade.png`. Pass when all descendants transition to aborted status.
-- [ ] Lane 4. Task failure with fail-fast policy stopping sibling tasks. Save `lane-4-fail-fast.png`. Pass when sibling tasks abort immediately.
-- [ ] Lane 5. Subagent crash recovery resuming child conversation. Save `lane-5-subagent-recovery.png`. Pass when child agent restarts from latest turn.
-- [ ] Lane 6. Subagent context isolation preventing tool access leak. Save `lane-6-context-isolation.png`. Pass when child agent cannot see parent tool credentials.
-- [ ] Lane 7. Custom task phase transition checkpoint persistence. Save `lane-7-phase-checkpoint.png`. Pass when phase state restores accurately.
-- [ ] Lane 8. Task compensation logic executing during abort. Save `lane-8-compensation.png`. Pass when compensation cleanup deletes temporary files.
-- [ ] Lane 9. Background task running detached from parent turn. Save `lane-9-detached-task.png`. Pass when parent completes while background task continues.
-- [ ] Lane 10. Cycle detection in task parent ownership pointers. Save `lane-10-cycle-detect.png`. Pass when recursive parent cycle raises validation error.
+- [x] Lane 1. Regression lane against trunk. Run hierarchical task with subagent on trunk and head. If trunk lacks the feature, record that and gate subagent lifecycle and result return. Save `lane-1-subagent-lifecycle.png`. Pass when subagent conversation completes and yields result to parent.
+- [x] Lane 2. Multi-tier task ownership tree with depth of three. Save `lane-2-depth-three.png`. Pass when root task coordinates leaf children.
+- [x] Lane 3. Bottom-up abort cascade on parent cancel. Save `lane-3-abort-cascade.png`. Pass when all descendants transition to aborted status.
+- [x] Lane 4. Task failure with fail-fast policy stopping sibling tasks. Save `lane-4-fail-fast.png`. Pass when sibling tasks abort immediately.
+- [x] Lane 5. Subagent crash recovery resuming child conversation. Save `lane-5-subagent-recovery.png`. Pass when child agent restarts from latest turn.
+- [x] Lane 6. Subagent context isolation preventing tool access leak. Save `lane-6-context-isolation.png`. Pass when child agent cannot see parent tool credentials.
+- [x] Lane 7. Custom task phase transition checkpoint persistence. Save `lane-7-phase-checkpoint.png`. Pass when phase state restores accurately.
+- [x] Lane 8. Task compensation logic executing during abort. Save `lane-8-compensation.png`. Pass when compensation cleanup deletes temporary files.
+- [x] Lane 9. Background task running detached from parent turn. Save `lane-9-detached-task.png`. Pass when parent completes while background task continues.
+- [x] Lane 10. Cycle detection in task parent ownership pointers. Save `lane-10-cycle-detect.png`. Pass when recursive parent cycle raises validation error.
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Metric. Cancellation cascade latency across a tree of fifty subtasks.
-- [ ] Probe. Spawn tree of fifty tasks and invoke abort on root node.
-- [ ] Baseline. Measure single task abort taking one millisecond.
-- [ ] Rule. Aborting fifty descendant tasks must complete in under twenty-five milliseconds.
+- [x] Metric. Cancellation cascade latency across a tree of fifty subtasks.
+- [x] Probe. Spawn tree of fifty tasks and invoke abort on root node.
+- [x] Baseline. Measure single task abort taking one millisecond.
+- [x] Rule. Aborting fifty descendant tasks must complete in under twenty-five milliseconds.
 
 **Review gate.** None. PR-04 is not review-gated.
 
 **Merge.**
 
-- [ ] Root clean verdict at exact head SHA.
-- [ ] Bugbot triage done.
-- [ ] Rebased onto parent branch after verdict, patch-id unchanged.
-- [ ] Owner pushes branch and reports STACK-READY to root.
+- [x] Root clean verdict at exact head SHA.
+- [x] Bugbot triage done.
+- [x] Rebased onto parent branch after verdict, patch-id unchanged.
+- [x] Owner pushes branch and reports STACK-READY to root.
 
 ## Support transcript branching and live steering (PR-05)
 
