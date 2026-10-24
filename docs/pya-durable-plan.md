@@ -286,60 +286,60 @@ Each live lane runs on its own virtual environment at the PR head. Drive through
 
 **Files.**
 
-- [ ] Create `src/pya_durable/branching.py`.
-- [ ] Create `src/pya_durable/steering.py`.
-- [ ] Create `src/pya_durable/worktrees.py`.
-- [ ] Create `tests/test_branching.py`.
+- [x] Create `src/pya_durable/branching.py`.
+- [x] Create `src/pya_durable/steering.py`.
+- [x] Create `src/pya_durable/worktrees.py`.
+- [x] Create `tests/test_branching.py`.
 
 **Build.**
 
-- [ ] Implement recursive CTE query for copy-on-write transcript history in `src/pya_durable/branching.py`.
-- [ ] Implement `conversation.fork()` creating linked child conversation without copying rows.
-- [ ] Implement `when_busy="steer"` injection queue between tool steps in `src/pya_durable/steering.py`.
-- [ ] Implement Git worktree isolation per active conversation in `src/pya_durable/worktrees.py`.
+- [x] Implement recursive CTE query for copy-on-write transcript history in `src/pya_durable/branching.py`.
+- [x] Implement `conversation.fork()` creating linked child conversation without copying rows.
+- [x] Implement `when_busy="steer"` injection queue between tool steps in `src/pya_durable/steering.py`.
+- [x] Implement Git worktree isolation per active conversation in `src/pya_durable/worktrees.py`.
 
 **You see.**
 
-- [ ] Forked conversation loads full history through parent entry pointers.
-- [ ] Steering message steers agent after tool step without resetting turn.
-- [ ] Log outputs `Injected steer message into active turn for conversation id`.
+- [x] Forked conversation loads full history through parent entry pointers.
+- [x] Steering message steers agent after tool step without resetting turn.
+- [x] Log outputs `Injected steer message into active turn for conversation id`.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Unit tests for tree traversal, fork creation, and steer injection in `tests/test_branching.py`. Run `uv run pytest tests/test_branching.py`.
+- [x] Unit tests for tree traversal, fork creation, and steer injection in `tests/test_branching.py`. Run `uv run pytest tests/test_branching.py`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Fork conversation at past entry and submit diverging prompt at trunk and head. If trunk lacks the feature, record that and gate fork creation and independent turn execution. Save `lane-1-fork-branch.png`. Pass when both branches advance without conflict.
-- [ ] Lane 2. Forking from deep transcript history with twenty turns. Save `lane-2-deep-fork.png`. Pass when recursive CTE resolves correct chronological order.
-- [ ] Lane 3. Mid-run steer injection during multi-step tool execution. Save `lane-3-steer-inject.png`. Pass when model adjusts behavior on next turn.
-- [ ] Lane 4. Concurrent execution on two forks of same parent. Save `lane-4-concurrent-forks.png`. Pass when both forks commit distinct transcript entries.
-- [ ] Lane 5. Git worktree creation for isolated branch exploration. Save `lane-5-worktree-create.png`. Pass when worktree directory checkouts target branch.
-- [ ] Lane 6. Worktree cleanup after completed exploration. Save `lane-6-worktree-clean.png`. Pass when temporary worktree and branch prune cleanly.
-- [ ] Lane 7. Fork pointing to nonexistent entry ID rejection. Save `lane-7-invalid-fork-entry.png`. Pass when invalid entry ID raises validation error.
-- [ ] Lane 8. Steer queue buffer handling multiple sequential steers. Save `lane-8-multiple-steers.png`. Pass when steers process in FIFO order.
-- [ ] Lane 9. Forking an already-forked conversation producing tree branch. Save `lane-9-nested-branch.png`. Pass when history traverses through both parent forks.
-- [ ] Lane 10. Steer ignored cleanly if turn settles before steer arrives. Save `lane-10-late-steer.png`. Pass when late steer handles as next user input.
+- [x] Lane 1. Regression lane against trunk. Fork conversation at past entry and submit diverging prompt at trunk and head. If trunk lacks the feature, record that and gate fork creation and independent turn execution. Save `lane-1-fork-branch.png`. Pass when both branches advance without conflict.
+- [x] Lane 2. Forking from deep transcript history with twenty turns. Save `lane-2-deep-fork.png`. Pass when recursive CTE resolves correct chronological order.
+- [x] Lane 3. Mid-run steer injection during multi-step tool execution. Save `lane-3-steer-inject.png`. Pass when model adjusts behavior on next turn.
+- [x] Lane 4. Concurrent execution on two forks of same parent. Save `lane-4-concurrent-forks.png`. Pass when both forks commit distinct transcript entries.
+- [x] Lane 5. Git worktree creation for isolated branch exploration. Save `lane-5-worktree-create.png`. Pass when worktree directory checkouts target branch.
+- [x] Lane 6. Worktree cleanup after completed exploration. Save `lane-6-worktree-clean.png`. Pass when temporary worktree and branch prune cleanly.
+- [x] Lane 7. Fork pointing to nonexistent entry ID rejection. Save `lane-7-invalid-fork-entry.png`. Pass when invalid entry ID raises validation error.
+- [x] Lane 8. Steer queue buffer handling multiple sequential steers. Save `lane-8-multiple-steers.png`. Pass when steers process in FIFO order.
+- [x] Lane 9. Forking an already-forked conversation producing tree branch. Save `lane-9-nested-branch.png`. Pass when history traverses through both parent forks.
+- [x] Lane 10. Steer ignored cleanly if turn settles before steer arrives. Save `lane-10-late-steer.png`. Pass when late steer handles as next user input.
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Metric. Query latency to reconstruct five hundred turns via recursive CTE.
-- [ ] Probe. Measure execution duration of recursive parent-pointer query across five hundred linked transcript rows.
-- [ ] Baseline. Measure flat table select of five hundred rows taking two milliseconds.
-- [ ] Rule. Recursive tree traversal for five hundred entries must complete within ten milliseconds.
+- [x] Metric. Query latency to reconstruct five hundred turns via recursive CTE.
+- [x] Probe. Measure execution duration of recursive parent-pointer query across five hundred linked transcript rows.
+- [x] Baseline. Measure flat table select of five hundred rows taking two milliseconds.
+- [x] Rule. Recursive tree traversal for five hundred entries must complete within ten milliseconds.
 
 **Review gate.** The operator reviews before merge.
 
-- [ ] Copy lane 1 screenshots into `docs/media/pr-05-review-fork-branch.png`.
-- [ ] Record a 30 to 60 second video of the change on a lane VM. Save it as `docs/media/pr-05-review.mp4`.
-- [ ] Post the screenshots and the video in chat. Stop at merge-ready. Wait for the operator's click.
+- [x] Copy lane 1 screenshots into `docs/media/pr-05-review-fork-branch.png`.
+- [x] Record a 30 to 60 second video of the change on a lane VM. Save it as `docs/media/pr-05-review.mp4`.
+- [x] Post the screenshots and the video in chat. Stop at merge-ready. Wait for the operator's click.
 
 **Merge.**
 
-- [ ] Root clean verdict at exact head SHA.
-- [ ] Bugbot triage done.
-- [ ] Rebased onto parent branch after verdict, patch-id unchanged.
-- [ ] Owner pushes branch and reports STACK-READY to root.
+- [x] Root clean verdict at exact head SHA.
+- [x] Bugbot triage done.
+- [x] Rebased onto parent branch after verdict, patch-id unchanged.
+- [x] Owner pushes branch and reports STACK-READY to root.
 
 ## Add durable documents and background compaction (PR-06)
 

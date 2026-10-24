@@ -1,3 +1,8 @@
+from pya_durable.branching import (
+    DurableConversation,
+    InvalidForkEntryError,
+    get_branch_ancestors,
+)
 from pya_durable.engine import DurableStepEngine, StepNodeCommit, TurnResult
 from pya_durable.harness import DurableHarness
 from pya_durable.models import (
@@ -26,6 +31,7 @@ from pya_durable.replay import (
     durable_tool,
     set_tool_partial_output,
 )
+from pya_durable.steering import SteeringQueue, global_steering_queue
 from pya_durable.storage import AioSqliteStorage
 from pya_durable.subagents import SubagentManager, SubagentResult
 from pya_durable.task_tree import (
@@ -37,6 +43,7 @@ from pya_durable.task_tree import (
     check_cycle,
     define_task,
 )
+from pya_durable.worktrees import GitWorktreeManager
 
 __all__ = [
     "AioSqliteStorage",
@@ -46,15 +53,21 @@ __all__ = [
     "CrashRecoveryManager",
     "CycleDetectedError",
     "DocId",
+    "DurableConversation",
     "DurableDocRecord",
     "DurableHarness",
     "DurableStepEngine",
     "EntryId",
+    "GitWorktreeManager",
+    "InvalidForkEntryError",
     "InvalidReplayPolicyError",
     "InvocationId",
     "ReplayPolicy",
     "RequestId",
+    "SteeringQueue",
     "StepNodeCommit",
+    "get_branch_ancestors",
+    "global_steering_queue",
     "SubagentManager",
     "SubagentResult",
     "SubmissionRecord",

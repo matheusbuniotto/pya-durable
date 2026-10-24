@@ -47,6 +47,37 @@ class DurableStepEngine:
     def __init__(self, storage: AioSqliteStorage) -> None:
         self.storage = storage
 
+    async def _drain_steers(
+        self,
+        runner: Any,
+        conversation_id: str,
+        current_parent_id: str | None,
+    ) -> str | None:
+        from pya_durable.steering import global_steering_queue
+
+        steer_msgs = global_steering_queue.pop_all(conversation_id)
+        for steer_msg in steer_msgs:
+            logger.info(
+                "Injected steer message into active turn for conversation id %s",
+                conversation_id,
+            )
+            if hasattr(runner, "enqueue"):
+                runner.enqueue(steer_msg)
+
+            steer_id = f"entry-{uuid.uuid4().hex[:16]}"
+            steer_entry = TranscriptEntryRecord(
+                entry_id=steer_id,
+                conversation_id=conversation_id,
+                parent_entry_id=current_parent_id,
+                kind=TranscriptEntryKind.USER,
+                message_json=json.dumps({"prompt": steer_msg, "steer": True}),
+            )
+            async with self.storage.transaction():
+                await self.storage.insert_transcript_entry(steer_entry)
+            current_parent_id = steer_id
+
+        return current_parent_id
+
     def _extract_node_payload(
         self, node: Any, prompt_text: str
     ) -> tuple[TranscriptEntryKind, str]:
@@ -166,6 +197,7 @@ class DurableStepEngine:
 
                         logger.info("Node %s committed with entry id %s", node_name, entry_id)
                         current_parent_id = entry_id
+                        current_parent_id = await self._drain_steers(runner, conversation_id, current_parent_id)
 
                         yield StepNodeCommit(
                             node_name=node_name,
@@ -283,6 +315,7 @@ class DurableStepEngine:
 
                         logger.info("Node %s committed with entry id %s", node_name, entry_id)
                         current_parent_id = entry_id
+                        current_parent_id = await self._drain_steers(runner, conversation_id, current_parent_id)
 
                         commit = StepNodeCommit(
                             node_name=node_name,
