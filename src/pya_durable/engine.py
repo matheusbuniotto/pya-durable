@@ -20,6 +20,7 @@ from pya_durable.models import (
 )
 from pya_durable.replay import durable_execution_context
 from pya_durable.storage import AioSqliteStorage
+from pya_durable.streaming import StreamEvent, stream_hub
 
 logger = logging.getLogger("pya_durable.engine")
 
@@ -196,6 +197,19 @@ class DurableStepEngine:
                             )
 
                         logger.info("Node %s committed with entry id %s", node_name, entry_id)
+                        stream_hub.publish(
+                            conversation_id,
+                            StreamEvent(
+                                conversation_id=conversation_id,
+                                event_type="node_commit",
+                                data={
+                                    "node_name": node_name,
+                                    "entry_id": entry_id,
+                                    "kind": kind.value if hasattr(kind, "value") else str(kind),
+                                    "payload": payload,
+                                },
+                            ),
+                        )
                         current_parent_id = entry_id
                         current_parent_id = await self._drain_steers(runner, conversation_id, current_parent_id)
 
@@ -314,6 +328,19 @@ class DurableStepEngine:
                             )
 
                         logger.info("Node %s committed with entry id %s", node_name, entry_id)
+                        stream_hub.publish(
+                            conversation_id,
+                            StreamEvent(
+                                conversation_id=conversation_id,
+                                event_type="node_commit",
+                                data={
+                                    "node_name": node_name,
+                                    "entry_id": entry_id,
+                                    "kind": kind.value if hasattr(kind, "value") else str(kind),
+                                    "payload": payload,
+                                },
+                            ),
+                        )
                         current_parent_id = entry_id
                         current_parent_id = await self._drain_steers(runner, conversation_id, current_parent_id)
 
