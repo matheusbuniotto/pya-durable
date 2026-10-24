@@ -70,54 +70,54 @@ Each live lane runs on its own virtual environment at the PR head. Drive through
 
 **Files.**
 
-- [ ] Create `pyproject.toml`.
-- [ ] Create `src/pya_durable/__init__.py`.
-- [ ] Create `src/pya_durable/models.py`.
-- [ ] Create `src/pya_durable/storage.py`.
-- [ ] Create `tests/test_storage.py`.
+- [x] Create `pyproject.toml`.
+- [x] Create `src/pya_durable/__init__.py`.
+- [x] Create `src/pya_durable/models.py`.
+- [x] Create `src/pya_durable/storage.py`.
+- [x] Create `tests/test_storage.py`.
 
 **Build.**
 
-- [ ] Define SQLite WAL schema and Pydantic domain models in `src/pya_durable/models.py`.
-- [ ] Implement `AioSqliteStorage` connection manager and atomic transaction helper in `src/pya_durable/storage.py`.
+- [x] Define SQLite WAL schema and Pydantic domain models in `src/pya_durable/models.py`.
+- [x] Implement `AioSqliteStorage` connection manager and atomic transaction helper in `src/pya_durable/storage.py`.
 
 **You see.**
 
-- [ ] SQLite database initializes in WAL mode with all tables created.
-- [ ] Log outputs `Storage initialized at path with WAL mode active`.
+- [x] SQLite database initializes in WAL mode with all tables created.
+- [x] Log outputs `Storage initialized at path with WAL mode active`.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Unit tests for table initialization, schema validation, and concurrent read transactions in `tests/test_storage.py`. Run `uv run pytest tests/test_storage.py`.
+- [x] Unit tests for table initialization, schema validation, and concurrent read transactions in `tests/test_storage.py`. Run `uv run pytest tests/test_storage.py`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run storage boot and table check at trunk and head. If trunk lacks the feature, record that and gate database creation and table existence. Save `lane-1-init.png`. Pass when all tables exist in SQLite schema.
-- [ ] Lane 2. Concurrent read transactions during active write transaction. Save `lane-2-concurrent.png`. Pass when readers complete without lock timeout.
-- [ ] Lane 3. Transaction rollback on simulated error. Save `lane-3-rollback.png`. Pass when zero rows persist after error.
-- [ ] Lane 4. Conversation record insert and fetch by ID. Save `lane-4-conv.png`. Pass when retrieved record matches input fields.
-- [ ] Lane 5. Transcript entry insert and parent ID linkage. Save `lane-5-transcript.png`. Pass when foreign keys validate correctly.
-- [ ] Lane 6. Task record insert with pending status. Save `lane-6-task.png`. Pass when task persists with valid enum values.
-- [ ] Lane 7. Tool invocation record state transitions. Save `lane-7-tool.png`. Pass when status updates from started to completed.
-- [ ] Lane 8. Submission record deduplication query. Save `lane-8-submission.png`. Pass when duplicate request ID raises unique constraint.
-- [ ] Lane 9. SQLite WAL file checkpointing and vacuum. Save `lane-9-wal.png`. Pass when checkpoint succeeds cleanly.
-- [ ] Lane 10. Database file corruption detection on invalid bytes. Save `lane-10-corrupt.png`. Pass when invalid header raises explicit error.
+- [x] Lane 1. Regression lane against trunk. Run storage boot and table check at trunk and head. If trunk lacks the feature, record that and gate database creation and table existence. Save `lane-1-init.png`. Pass when all tables exist in SQLite schema.
+- [x] Lane 2. Concurrent read transactions during active write transaction. Save `lane-2-concurrent.png`. Pass when readers complete without lock timeout.
+- [x] Lane 3. Transaction rollback on simulated error. Save `lane-3-rollback.png`. Pass when zero rows persist after error.
+- [x] Lane 4. Conversation record insert and fetch by ID. Save `lane-4-conv.png`. Pass when retrieved record matches input fields.
+- [x] Lane 5. Transcript entry insert and parent ID linkage. Save `lane-5-transcript.png`. Pass when foreign keys validate correctly.
+- [x] Lane 6. Task record insert with pending status. Save `lane-6-task.png`. Pass when task persists with valid enum values.
+- [x] Lane 7. Tool invocation record state transitions. Save `lane-7-tool.png`. Pass when status updates from started to completed.
+- [x] Lane 8. Submission record deduplication query. Save `lane-8-submission.png`. Pass when duplicate request ID raises unique constraint.
+- [x] Lane 9. SQLite WAL file checkpointing and vacuum. Save `lane-9-wal.png`. Pass when checkpoint succeeds cleanly.
+- [x] Lane 10. Database file corruption detection on invalid bytes. Save `lane-10-corrupt.png`. Pass when invalid header raises explicit error.
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Metric. Wall clock latency for one thousand sequential transcript inserts.
-- [ ] Probe. Run benchmark script inserting one thousand transcript rows inside a single transaction.
-- [ ] Baseline. Record trunk baseline time or mock SQLite baseline of one hundred milliseconds.
-- [ ] Rule. Head must insert one thousand rows in under one hundred fifty milliseconds.
+- [x] Metric. Wall clock latency for one thousand sequential transcript inserts.
+- [x] Probe. Run benchmark script inserting one thousand transcript rows inside a single transaction.
+- [x] Baseline. Record trunk baseline time or mock SQLite baseline of one hundred milliseconds.
+- [x] Rule. Head must insert one thousand rows in under one hundred fifty milliseconds.
 
 **Review gate.** None. PR-01 is not review-gated.
 
 **Merge.**
 
-- [ ] Root clean verdict at exact head SHA.
-- [ ] Bugbot triage done.
-- [ ] Rebased onto current trunk after verdict, patch-id unchanged.
-- [ ] Owner pushes branch and reports STACK-READY to root.
+- [x] Root clean verdict at exact head SHA.
+- [x] Bugbot triage done.
+- [x] Rebased onto current trunk after verdict, patch-id unchanged.
+- [x] Owner pushes branch and reports STACK-READY to root.
 
 ## Implement step engine with agent iter (PR-02)
 
