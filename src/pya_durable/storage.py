@@ -427,6 +427,49 @@ class AioSqliteStorage:
                 updated_at=row[12],
             )
 
+    async def get_tasks_by_status(
+        self,
+        status: TaskStatus,
+        conn: aiosqlite.Connection | None = None,
+    ) -> list[TaskRecord]:
+        target = conn or await self.get_connection()
+        status_val = status.value if isinstance(status, TaskStatus) else str(status)
+        async with target.execute(
+            """
+            SELECT task_id, task_type, version, status, owner_kind, owner_id,
+                   phase, input_json, state_json, checkpoint_json, policy, created_at, updated_at
+            FROM tasks
+            WHERE status = ?
+            ORDER BY created_at ASC
+            """,
+            (status_val,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [
+                TaskRecord(
+                    task_id=row[0],
+                    task_type=row[1],
+                    version=row[2],
+                    status=TaskStatus(row[3]),
+                    owner_kind=row[4],
+                    owner_id=row[5],
+                    phase=row[6],
+                    input_json=row[7],
+                    state_json=row[8],
+                    checkpoint_json=row[9],
+                    policy=row[10],
+                    created_at=row[11],
+                    updated_at=row[12],
+                )
+                for row in rows
+            ]
+
+    async def get_running_tasks(
+        self,
+        conn: aiosqlite.Connection | None = None,
+    ) -> list[TaskRecord]:
+        return await self.get_tasks_by_status(TaskStatus.RUNNING, conn=conn)
+
     async def record_tool_started(
         self,
         invocation: ToolInvocationRecord,
@@ -541,6 +584,120 @@ class AioSqliteStorage:
                 completed_at=row[11],
             )
 
+    async def update_tool_partial_output(
+        self,
+        invocation_id: str,
+        partial_output: str,
+        conn: aiosqlite.Connection | None = None,
+    ) -> None:
+        target = conn or await self.get_connection()
+        await target.execute(
+            """
+            UPDATE tool_invocations
+            SET partial_output = ?
+            WHERE invocation_id = ?
+            """,
+            (partial_output, invocation_id),
+        )
+
+    async def get_tool_invocations_by_task(
+        self,
+        task_id: str,
+        conn: aiosqlite.Connection | None = None,
+    ) -> list[ToolInvocationRecord]:
+        target = conn or await self.get_connection()
+        async with target.execute(
+            """
+            SELECT invocation_id, task_id, conversation_id, tool_name, args_json,
+                   replay_policy, status, result_json, partial_output, error_message, started_at, completed_at
+            FROM tool_invocations
+            WHERE task_id = ?
+            ORDER BY started_at ASC
+            """,
+            (task_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [
+                ToolInvocationRecord(
+                    invocation_id=row[0],
+                    task_id=row[1],
+                    conversation_id=row[2],
+                    tool_name=row[3],
+                    args_json=row[4],
+                    replay_policy=row[5],
+                    status=ToolInvocationStatus(row[6]),
+                    result_json=row[7],
+                    partial_output=row[8],
+                    error_message=row[9],
+                    started_at=row[10],
+                    completed_at=row[11],
+                )
+                for row in rows
+            ]
+
+    async def get_tool_invocations_by_status(
+        self,
+        status: ToolInvocationStatus,
+        conn: aiosqlite.Connection | None = None,
+    ) -> list[ToolInvocationRecord]:
+        target = conn or await self.get_connection()
+        status_val = status.value if isinstance(status, ToolInvocationStatus) else str(status)
+        async with target.execute(
+            """
+            SELECT invocation_id, task_id, conversation_id, tool_name, args_json,
+                   replay_policy, status, result_json, partial_output, error_message, started_at, completed_at
+            FROM tool_invocations
+            WHERE status = ?
+            ORDER BY started_at ASC
+            """,
+            (status_val,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [
+                ToolInvocationRecord(
+                    invocation_id=row[0],
+                    task_id=row[1],
+                    conversation_id=row[2],
+                    tool_name=row[3],
+                    args_json=row[4],
+                    replay_policy=row[5],
+                    status=ToolInvocationStatus(row[6]),
+                    result_json=row[7],
+                    partial_output=row[8],
+                    error_message=row[9],
+                    started_at=row[10],
+                    completed_at=row[11],
+                )
+                for row in rows
+            ]
+
+    async def reconcile_started_tool_invocations(
+        self,
+        conn: aiosqlite.Connection | None = None,
+    ) -> tuple[int, int]:
+        target = conn or await self.get_connection()
+        completed_at = utc_now_iso()
+        async with target.execute(
+            """
+            UPDATE tool_invocations
+            SET status = 'interrupted', completed_at = ?
+            WHERE status = 'started' AND replay_policy = 'unsafe'
+            """,
+            (completed_at,),
+        ) as cursor:
+            unsafe_count = cursor.rowcount
+
+        async with target.execute(
+            """
+            SELECT COUNT(*) FROM tool_invocations
+            WHERE status = 'started' AND replay_policy = 'safe'
+            """
+        ) as cursor:
+            row = await cursor.fetchone()
+            safe_count = row[0] if row else 0
+
+        return (safe_count, unsafe_count)
+
     async def insert_submission(
         self,
         submission: SubmissionRecord,
@@ -589,6 +746,27 @@ class AioSqliteStorage:
                 result_json=row[5],
                 created_at=row[6],
             )
+
+    async def update_submission(
+        self,
+        request_id: str,
+        status: SubmissionStatus,
+        result_json: str | None = None,
+        conn: aiosqlite.Connection | None = None,
+    ) -> None:
+        target = conn or await self.get_connection()
+        await target.execute(
+            """
+            UPDATE submissions
+            SET status = ?, result_json = ?
+            WHERE request_id = ?
+            """,
+            (
+                status.value if isinstance(status, SubmissionStatus) else str(status),
+                result_json,
+                request_id,
+            ),
+        )
 
     async def upsert_durable_doc(
         self,

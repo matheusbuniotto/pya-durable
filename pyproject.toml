@@ -26,3 +26,8 @@ packages = ["src/pya_durable"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pillow>=12.3.0",
+]

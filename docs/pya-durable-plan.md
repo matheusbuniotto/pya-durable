@@ -125,52 +125,52 @@ Each live lane runs on its own virtual environment at the PR head. Drive through
 
 **Files.**
 
-- [ ] Create `src/pya_durable/engine.py`.
-- [ ] Create `src/pya_durable/harness.py`.
-- [ ] Create `tests/test_engine.py`.
+- [x] Create `src/pya_durable/engine.py`.
+- [x] Create `src/pya_durable/harness.py`.
+- [x] Create `tests/test_engine.py`.
 
 **Build.**
 
-- [ ] Implement `DurableStepEngine` driving `agent.iter` node transitions in `src/pya_durable/engine.py`.
-- [ ] Connect `UserPromptNode`, `ModelRequestNode`, `CallToolsNode`, and `End` to SQLite storage commits.
+- [x] Implement `DurableStepEngine` driving `agent.iter` node transitions in `src/pya_durable/engine.py`.
+- [x] Connect `UserPromptNode`, `ModelRequestNode`, `CallToolsNode`, and `End` to SQLite storage commits.
 
 **You see.**
 
-- [ ] Agent execution steps through nodes with each step recorded in transcript table.
-- [ ] Log outputs `Node UserPromptNode committed with entry id`.
+- [x] Agent execution steps through nodes with each step recorded in transcript table.
+- [x] Log outputs `Node UserPromptNode committed with entry id`.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Unit tests checking message serialization and node iteration in `tests/test_engine.py`. Run `uv run pytest tests/test_engine.py`.
+- [x] Unit tests checking message serialization and node iteration in `tests/test_engine.py`. Run `uv run pytest tests/test_engine.py`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run single-turn agent execution on trunk and head. If trunk lacks the feature, record that and gate agent completion and transcript persistence. Save `lane-1-single-turn.png`. Pass when prompt and answer persist to transcript table.
-- [ ] Lane 2. Multi-turn conversation continuing from previous history. Save `lane-2-multi-turn.png`. Pass when restored history matches previous turns.
-- [ ] Lane 3. Tool call node interception and argument capture. Save `lane-3-tool-intercept.png`. Pass when tool call arguments serialize accurately.
-- [ ] Lane 4. Tool return value integration back into model context. Save `lane-4-tool-return.png`. Pass when model receives tool result and produces final answer.
-- [ ] Lane 5. Final output schema extraction from End node. Save `lane-5-end-node.png`. Pass when typed output matches Pydantic response model.
-- [ ] Lane 6. Model token usage tracking into task record. Save `lane-6-usage.png`. Pass when token count matches provider response.
-- [ ] Lane 7. Empty prompt rejection at boundary. Save `lane-7-empty-prompt.png`. Pass when validation error raises before database write.
-- [ ] Lane 8. Serialization roundtrip for complex nested tool arguments. Save `lane-8-nested-args.png`. Pass when deserialized arguments match input types.
-- [ ] Lane 9. Provider rate limit error capture into task record. Save `lane-9-rate-limit.png`. Pass when error status marks task as failed with error details.
-- [ ] Lane 10. Premature generator close simulation. Save `lane-10-early-close.png`. Pass when unfinished step records partial state cleanly.
+- [x] Lane 1. Regression lane against trunk. Run single-turn agent execution on trunk and head. If trunk lacks the feature, record that and gate agent completion and transcript persistence. Save `lane-1-single-turn.png`. Pass when prompt and answer persist to transcript table.
+- [x] Lane 2. Multi-turn conversation continuing from previous history. Save `lane-2-multi-turn.png`. Pass when restored history matches previous turns.
+- [x] Lane 3. Tool call node interception and argument capture. Save `lane-3-tool-intercept.png`. Pass when tool call arguments serialize accurately.
+- [x] Lane 4. Tool return value integration back into model context. Save `lane-4-tool-return.png`. Pass when model receives tool result and produces final answer.
+- [x] Lane 5. Final output schema extraction from End node. Save `lane-5-end-node.png`. Pass when typed output matches Pydantic response model.
+- [x] Lane 6. Model token usage tracking into task record. Save `lane-6-usage.png`. Pass when token count matches provider response.
+- [x] Lane 7. Empty prompt rejection at boundary. Save `lane-7-empty-prompt.png`. Pass when validation error raises before database write.
+- [x] Lane 8. Serialization roundtrip for complex nested tool arguments. Save `lane-8-nested-args.png`. Pass when deserialized arguments match input types.
+- [x] Lane 9. Provider rate limit error capture into task record. Save `lane-9-rate-limit.png`. Pass when error status marks task as failed with error details.
+- [x] Lane 10. Premature generator close simulation. Save `lane-10-early-close.png`. Pass when unfinished step records partial state cleanly.
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Metric. Overhead added by SQLite checkpointing per model turn.
-- [ ] Probe. Measure elapsed turn duration comparing direct agent run versus durable step engine with mock model.
-- [ ] Baseline. Measure direct agent execution taking five milliseconds per mock turn.
-- [ ] Rule. Durable step engine checkpointing overhead must stay under fifteen milliseconds per turn.
+- [x] Metric. Overhead added by SQLite checkpointing per model turn.
+- [x] Probe. Measure elapsed turn duration comparing direct agent run versus durable step engine with mock model.
+- [x] Baseline. Measure direct agent execution taking five milliseconds per mock turn.
+- [x] Rule. Durable step engine checkpointing overhead must stay under fifteen milliseconds per turn.
 
 **Review gate.** None. PR-02 is not review-gated.
 
 **Merge.**
 
-- [ ] Root clean verdict at exact head SHA.
-- [ ] Bugbot triage done.
-- [ ] Rebased onto parent branch after verdict, patch-id unchanged.
-- [ ] Owner pushes branch and reports STACK-READY to root.
+- [x] Root clean verdict at exact head SHA.
+- [x] Bugbot triage done.
+- [x] Rebased onto parent branch after verdict, patch-id unchanged.
+- [x] Owner pushes branch and reports STACK-READY to root.
 
 ## Add durable tool replay and crash recovery (PR-03)
 
@@ -178,52 +178,52 @@ Each live lane runs on its own virtual environment at the PR head. Drive through
 
 **Files.**
 
-- [ ] Create `src/pya_durable/replay.py`.
-- [ ] Create `src/pya_durable/recovery.py`.
-- [ ] Create `tests/test_recovery.py`.
+- [x] Create `src/pya_durable/replay.py`.
+- [x] Create `src/pya_durable/recovery.py`.
+- [x] Create `tests/test_recovery.py`.
 
 **Build.**
 
-- [ ] Implement `@durable_tool` decorator with replay policy parameter in `src/pya_durable/replay.py`.
-- [ ] Implement `Harness.resume()` scanning running tasks and reconciling interrupted tool invocations in `src/pya_durable/recovery.py`.
+- [x] Implement `@durable_tool` decorator with replay policy parameter in `src/pya_durable/replay.py`.
+- [x] Implement `Harness.resume()` scanning running tasks and reconciling interrupted tool invocations in `src/pya_durable/recovery.py`.
 
 **You see.**
 
-- [ ] Crash simulation resumes and re-executes safe tools while sealing unsafe tools.
-- [ ] Log outputs `Reconciliation finished, resumed task id from phase`.
+- [x] Crash simulation resumes and re-executes safe tools while sealing unsafe tools.
+- [x] Log outputs `Reconciliation finished, resumed task id from phase`.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Unit tests for safe versus unsafe replay policies and resumption logic in `tests/test_recovery.py`. Run `uv run pytest tests/test_recovery.py`.
+- [x] Unit tests for safe versus unsafe replay policies and resumption logic in `tests/test_recovery.py`. Run `uv run pytest tests/test_recovery.py`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Simulate crash during tool execution at trunk and head. If trunk lacks the feature, record that and gate crash recovery state reconciliation. Save `lane-1-crash-recovery.png`. Pass when task resumes and completes successfully.
-- [ ] Lane 2. Safe read tool replay after process termination. Save `lane-2-safe-tool.png`. Pass when tool reruns and stores result.
-- [ ] Lane 3. Unsafe mutating tool interrupted state recording. Save `lane-3-unsafe-tool.png`. Pass when tool is not re-executed and marked interrupted.
-- [ ] Lane 4. Request ID deduplication on retry submission. Save `lane-4-idempotent-submit.png`. Pass when second submission returns original task result.
-- [ ] Lane 5. Multiple in-flight tasks recovered in parallel during boot. Save `lane-5-parallel-recovery.png`. Pass when all running tasks transition to valid state.
-- [ ] Lane 6. Partial tool output preserved across crash. Save `lane-6-partial-output.png`. Pass when streamed partial text is retrievable.
-- [ ] Lane 7. Tool timeout during replay handled gracefully. Save `lane-7-tool-timeout.png`. Pass when timeout marks tool invocation failed.
-- [ ] Lane 8. Process kill during model request generation. Save `lane-8-kill-model-req.png`. Pass when model request regenerates cleanly on restart.
-- [ ] Lane 9. Recovery with clean database containing zero incomplete tasks. Save `lane-9-noop-recovery.png`. Pass when resume executes as a clean no-op.
-- [ ] Lane 10. Replay policy validation rejecting unknown policy string. Save `lane-10-invalid-policy.png`. Pass when invalid policy raises configuration error.
+- [x] Lane 1. Regression lane against trunk. Simulate crash during tool execution at trunk and head. If trunk lacks the feature, record that and gate crash recovery state reconciliation. Save `lane-1-crash-recovery.png`. Pass when task resumes and completes successfully.
+- [x] Lane 2. Safe read tool replay after process termination. Save `lane-2-safe-tool.png`. Pass when tool reruns and stores result.
+- [x] Lane 3. Unsafe mutating tool interrupted state recording. Save `lane-3-unsafe-tool.png`. Pass when tool is not re-executed and marked interrupted.
+- [x] Lane 4. Request ID deduplication on retry submission. Save `lane-4-idempotent-submit.png`. Pass when second submission returns original task result.
+- [x] Lane 5. Multiple in-flight tasks recovered in parallel during boot. Save `lane-5-parallel-recovery.png`. Pass when all running tasks transition to valid state.
+- [x] Lane 6. Partial tool output preserved across crash. Save `lane-6-partial-output.png`. Pass when streamed partial text is retrievable.
+- [x] Lane 7. Tool timeout during replay handled gracefully. Save `lane-7-tool-timeout.png`. Pass when timeout marks tool invocation failed.
+- [x] Lane 8. Process kill during model request generation. Save `lane-8-kill-model-req.png`. Pass when model request regenerates cleanly on restart.
+- [x] Lane 9. Recovery with clean database containing zero incomplete tasks. Save `lane-9-noop-recovery.png`. Pass when resume executes as a clean no-op.
+- [x] Lane 10. Replay policy validation rejecting unknown policy string. Save `lane-10-invalid-policy.png`. Pass when invalid policy raises configuration error.
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Metric. Time required to scan and reconcile one hundred interrupted tool calls at boot.
-- [ ] Probe. Measure execution duration of `Harness.resume()` over database preloaded with one hundred started tool rows.
-- [ ] Baseline. Measure empty database boot time of two milliseconds.
-- [ ] Rule. Reconciling one hundred interrupted invocations must complete within fifty milliseconds.
+- [x] Metric. Time required to scan and reconcile one hundred interrupted tool calls at boot.
+- [x] Probe. Measure execution duration of `Harness.resume()` over database preloaded with one hundred started tool rows.
+- [x] Baseline. Measure empty database boot time of two milliseconds.
+- [x] Rule. Reconciling one hundred interrupted invocations must complete within fifty milliseconds.
 
 **Review gate.** None. PR-03 is not review-gated.
 
 **Merge.**
 
-- [ ] Root clean verdict at exact head SHA.
-- [ ] Bugbot triage done.
-- [ ] Rebased onto parent branch after verdict, patch-id unchanged.
-- [ ] Owner pushes branch and reports STACK-READY to root.
+- [x] Root clean verdict at exact head SHA.
+- [x] Bugbot triage done.
+- [x] Rebased onto parent branch after verdict, patch-id unchanged.
+- [x] Owner pushes branch and reports STACK-READY to root.
 
 ## Implement task hierarchy and subagent delegation (PR-04)
 
@@ -231,54 +231,54 @@ Each live lane runs on its own virtual environment at the PR head. Drive through
 
 **Files.**
 
-- [ ] Create `src/pya_durable/task_tree.py`.
-- [ ] Create `src/pya_durable/subagents.py`.
-- [ ] Create `tests/test_tasks.py`.
+- [x] Create `src/pya_durable/task_tree.py`.
+- [x] Create `src/pya_durable/subagents.py`.
+- [x] Create `tests/test_tasks.py`.
 
 **Build.**
 
-- [ ] Implement `define_task` state machine runner with phase transitions in `src/pya_durable/task_tree.py`.
-- [ ] Implement subagent conversation creation with task ownership in `src/pya_durable/subagents.py`.
-- [ ] Implement recursive bottom-up task cancellation.
+- [x] Implement `define_task` state machine runner with phase transitions in `src/pya_durable/task_tree.py`.
+- [x] Implement subagent conversation creation with task ownership in `src/pya_durable/subagents.py`.
+- [x] Implement recursive bottom-up task cancellation.
 
 **You see.**
 
-- [ ] Parent task creates child task and awaits result.
-- [ ] Canceling parent task cascades abort to all child tasks and subagents.
-- [ ] Log outputs `Aborted child task id due to parent cancellation`.
+- [x] Parent task creates child task and awaits result.
+- [x] Canceling parent task cascades abort to all child tasks and subagents.
+- [x] Log outputs `Aborted child task id due to parent cancellation`.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Unit tests for hierarchical ownership, phase checkpoints, and abort cascades in `tests/test_tasks.py`. Run `uv run pytest tests/test_tasks.py`.
+- [x] Unit tests for hierarchical ownership, phase checkpoints, and abort cascades in `tests/test_tasks.py`. Run `uv run pytest tests/test_tasks.py`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run hierarchical task with subagent on trunk and head. If trunk lacks the feature, record that and gate subagent lifecycle and result return. Save `lane-1-subagent-lifecycle.png`. Pass when subagent conversation completes and yields result to parent.
-- [ ] Lane 2. Multi-tier task ownership tree with depth of three. Save `lane-2-depth-three.png`. Pass when root task coordinates leaf children.
-- [ ] Lane 3. Bottom-up abort cascade on parent cancel. Save `lane-3-abort-cascade.png`. Pass when all descendants transition to aborted status.
-- [ ] Lane 4. Task failure with fail-fast policy stopping sibling tasks. Save `lane-4-fail-fast.png`. Pass when sibling tasks abort immediately.
-- [ ] Lane 5. Subagent crash recovery resuming child conversation. Save `lane-5-subagent-recovery.png`. Pass when child agent restarts from latest turn.
-- [ ] Lane 6. Subagent context isolation preventing tool access leak. Save `lane-6-context-isolation.png`. Pass when child agent cannot see parent tool credentials.
-- [ ] Lane 7. Custom task phase transition checkpoint persistence. Save `lane-7-phase-checkpoint.png`. Pass when phase state restores accurately.
-- [ ] Lane 8. Task compensation logic executing during abort. Save `lane-8-compensation.png`. Pass when compensation cleanup deletes temporary files.
-- [ ] Lane 9. Background task running detached from parent turn. Save `lane-9-detached-task.png`. Pass when parent completes while background task continues.
-- [ ] Lane 10. Cycle detection in task parent ownership pointers. Save `lane-10-cycle-detect.png`. Pass when recursive parent cycle raises validation error.
+- [x] Lane 1. Regression lane against trunk. Run hierarchical task with subagent on trunk and head. If trunk lacks the feature, record that and gate subagent lifecycle and result return. Save `lane-1-subagent-lifecycle.png`. Pass when subagent conversation completes and yields result to parent.
+- [x] Lane 2. Multi-tier task ownership tree with depth of three. Save `lane-2-depth-three.png`. Pass when root task coordinates leaf children.
+- [x] Lane 3. Bottom-up abort cascade on parent cancel. Save `lane-3-abort-cascade.png`. Pass when all descendants transition to aborted status.
+- [x] Lane 4. Task failure with fail-fast policy stopping sibling tasks. Save `lane-4-fail-fast.png`. Pass when sibling tasks abort immediately.
+- [x] Lane 5. Subagent crash recovery resuming child conversation. Save `lane-5-subagent-recovery.png`. Pass when child agent restarts from latest turn.
+- [x] Lane 6. Subagent context isolation preventing tool access leak. Save `lane-6-context-isolation.png`. Pass when child agent cannot see parent tool credentials.
+- [x] Lane 7. Custom task phase transition checkpoint persistence. Save `lane-7-phase-checkpoint.png`. Pass when phase state restores accurately.
+- [x] Lane 8. Task compensation logic executing during abort. Save `lane-8-compensation.png`. Pass when compensation cleanup deletes temporary files.
+- [x] Lane 9. Background task running detached from parent turn. Save `lane-9-detached-task.png`. Pass when parent completes while background task continues.
+- [x] Lane 10. Cycle detection in task parent ownership pointers. Save `lane-10-cycle-detect.png`. Pass when recursive parent cycle raises validation error.
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Metric. Cancellation cascade latency across a tree of fifty subtasks.
-- [ ] Probe. Spawn tree of fifty tasks and invoke abort on root node.
-- [ ] Baseline. Measure single task abort taking one millisecond.
-- [ ] Rule. Aborting fifty descendant tasks must complete in under twenty-five milliseconds.
+- [x] Metric. Cancellation cascade latency across a tree of fifty subtasks.
+- [x] Probe. Spawn tree of fifty tasks and invoke abort on root node.
+- [x] Baseline. Measure single task abort taking one millisecond.
+- [x] Rule. Aborting fifty descendant tasks must complete in under twenty-five milliseconds.
 
 **Review gate.** None. PR-04 is not review-gated.
 
 **Merge.**
 
-- [ ] Root clean verdict at exact head SHA.
-- [ ] Bugbot triage done.
-- [ ] Rebased onto parent branch after verdict, patch-id unchanged.
-- [ ] Owner pushes branch and reports STACK-READY to root.
+- [x] Root clean verdict at exact head SHA.
+- [x] Bugbot triage done.
+- [x] Rebased onto parent branch after verdict, patch-id unchanged.
+- [x] Owner pushes branch and reports STACK-READY to root.
 
 ## Support transcript branching and live steering (PR-05)
 
