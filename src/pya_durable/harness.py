@@ -10,6 +10,12 @@ from pya_durable.branching import InvalidForkEntryError
 from pya_durable.compaction import BackgroundCompactor
 from pya_durable.docs import DocDefinition, DocumentManager
 from pya_durable.engine import DurableStepEngine, TurnResult
+from pya_durable.extensions import (
+    ExtensionDefinition,
+    ExtensionRegistry,
+    SectionContext,
+    global_extension_registry,
+)
 from pya_durable.models import (
     ConversationRecord,
     SubmissionRecord,
@@ -39,6 +45,7 @@ class DurableHarness(Generic[TOutput]):
         fork_entry_id: str | None = None,
         compaction_threshold: int = 4000,
         auto_compact: bool = False,
+        registry: ExtensionRegistry | None = None,
     ) -> None:
         self.agent = agent
         self.storage = storage
@@ -49,8 +56,15 @@ class DurableHarness(Generic[TOutput]):
         self.engine = DurableStepEngine(storage)
         self.compaction_threshold = compaction_threshold
         self.auto_compact = auto_compact
+        self.registry = registry if registry is not None else global_extension_registry
         self._busy = False
         self._initialized = False
+
+    def install_extension(self, ext: ExtensionDefinition) -> None:
+        self.registry.install(ext)
+
+    def uninstall_extension(self, name: str) -> None:
+        self.registry.uninstall(name)
 
     async def _ensure_conversation(self) -> None:
         if not self._initialized:
@@ -134,6 +148,7 @@ class DurableHarness(Generic[TOutput]):
             fork_entry_id=target_fork_id,
             compaction_threshold=self.compaction_threshold,
             auto_compact=self.auto_compact,
+            registry=self.registry,
         )
         child._initialized = True
         return child
@@ -254,7 +269,20 @@ class DurableHarness(Generic[TOutput]):
         request_id: str | None = None,
         when_busy: str | None = None,
     ) -> TurnResult[TOutput] | None:
-        return await self.run(prompt=prompt, deps=deps, request_id=request_id, when_busy=when_busy)
+        effective_prompt = prompt
+        section_ctx = SectionContext(conversation_id=self.conversation_id)
+        rendered_sections = await self.registry.render_prompt_sections(section_ctx)
+        if rendered_sections:
+            if effective_prompt:
+                effective_prompt = f"{rendered_sections}\n\n{effective_prompt}"
+            else:
+                effective_prompt = rendered_sections
+        return await self.run(
+            prompt=effective_prompt,
+            deps=deps,
+            request_id=request_id,
+            when_busy=when_busy,
+        )
 
     async def resume(self, task_id: str | None = None) -> Any:
         manager = CrashRecoveryManager(self.storage, agent=self.agent)
