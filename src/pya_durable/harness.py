@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import json
+from pathlib import Path
 import uuid
-from typing import Any, AsyncIterator, Generic, Sequence, TypeVar
+from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Generic, Sequence, TypeVar
 
 import aiosqlite
 from pydantic_ai import Agent
@@ -31,6 +34,9 @@ from pya_durable.steering import global_steering_queue
 from pya_durable.storage import AioSqliteStorage
 from pya_durable.streaming import StreamEvent, stream_hub
 
+if TYPE_CHECKING:
+    from pya_durable.env import ExecutionEnv
+
 TOutput = TypeVar("TOutput")
 TDoc = TypeVar("TDoc")
 
@@ -46,6 +52,8 @@ class DurableHarness(Generic[TOutput]):
         compaction_threshold: int = 4000,
         auto_compact: bool = False,
         registry: ExtensionRegistry | None = None,
+        env: ExecutionEnv | None = None,
+        env_factory: Callable[[str, Path | str | None], ExecutionEnv] | ExecutionEnv | None = None,
     ) -> None:
         self.agent = agent
         self.storage = storage
@@ -57,8 +65,29 @@ class DurableHarness(Generic[TOutput]):
         self.compaction_threshold = compaction_threshold
         self.auto_compact = auto_compact
         self.registry = registry if registry is not None else global_extension_registry
+        self._env = env
+        self._env_factory = env_factory
         self._busy = False
         self._initialized = False
+
+    def get_conversation_env(
+        self,
+        conversation_id: str | None = None,
+        cwd: Path | str | None = None,
+    ) -> ExecutionEnv:
+        target_id = conversation_id or self.conversation_id
+        if self._env is not None:
+            return self._env
+        if self._env_factory is not None:
+            if callable(self._env_factory):
+                return self._env_factory(target_id, cwd)
+            return self._env_factory
+        from pya_durable.env import LocalExecutionEnv
+        return LocalExecutionEnv(cwd=cwd or Path.cwd())
+
+    @property
+    def env(self) -> ExecutionEnv:
+        return self.get_conversation_env()
 
     def install_extension(self, ext: ExtensionDefinition) -> None:
         self.registry.install(ext)
@@ -325,3 +354,46 @@ class DurableHarness(Generic[TOutput]):
                 except Exception:
                     pass
         return messages
+
+    async def fork(
+        self,
+        fork_entry_id: str | None = None,
+        new_conversation_id: str | None = None,
+        agent: Agent[Any, Any] | None = None,
+        env: ExecutionEnv | None = None,
+    ) -> "DurableHarness[Any]":
+        await self._ensure_conversation()
+
+        target_fork_id = fork_entry_id or self.current_leaf_entry_id
+        if target_fork_id:
+            ancestor = await self.storage.get_transcript_entry(target_fork_id)
+            if ancestor is None:
+                raise InvalidForkEntryError(f"Fork entry {target_fork_id} not found")
+
+        child_conv_id = new_conversation_id or f"conv-{uuid.uuid4().hex[:12]}"
+        child_agent = agent or self.agent
+
+        record = ConversationRecord(
+            conversation_id=child_conv_id,
+            parent_conversation_id=self.conversation_id,
+            fork_entry_id=target_fork_id,
+            agent_config_json=json.dumps(
+                {"name": getattr(child_agent, "name", "agent") if child_agent else "agent"}
+            ),
+        )
+        await self.storage.insert_conversation(record)
+
+        child = DurableHarness(
+            agent=child_agent,
+            storage=self.storage,
+            conversation_id=child_conv_id,
+            parent_conversation_id=self.conversation_id,
+            fork_entry_id=target_fork_id,
+            compaction_threshold=self.compaction_threshold,
+            auto_compact=self.auto_compact,
+            registry=self.registry,
+            env=env if env is not None else self._env,
+            env_factory=self._env_factory,
+        )
+        child._initialized = True
+        return child

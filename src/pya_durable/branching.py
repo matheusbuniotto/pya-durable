@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import json
 import logging
+from pathlib import Path
 import uuid
-from typing import Any, AsyncIterator, TypeVar
+from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, TypeVar
 
 import aiosqlite
 from pydantic_ai import Agent
@@ -22,6 +25,9 @@ from pya_durable.models import (
 from pya_durable.steering import global_steering_queue
 from pya_durable.storage import AioSqliteStorage
 from pya_durable.streaming import StreamEvent, stream_hub
+
+if TYPE_CHECKING:
+    from pya_durable.env import ExecutionEnv
 
 logger = logging.getLogger("pya_durable.branching")
 
@@ -52,6 +58,8 @@ class DurableConversation:
         current_leaf_entry_id: str | None = None,
         compaction_threshold: int = 4000,
         auto_compact: bool = False,
+        env: ExecutionEnv | None = None,
+        env_factory: Callable[[str, Path | str | None], ExecutionEnv] | ExecutionEnv | None = None,
     ) -> None:
         self.conversation_id = conversation_id
         self.storage = storage
@@ -62,8 +70,21 @@ class DurableConversation:
         self.engine = DurableStepEngine(storage)
         self.compaction_threshold = compaction_threshold
         self.auto_compact = auto_compact
+        self._env = env
+        self._env_factory = env_factory
         self._busy = False
         self._initialized = False
+
+    @property
+    def env(self) -> ExecutionEnv:
+        if self._env is not None:
+            return self._env
+        if self._env_factory is not None:
+            if callable(self._env_factory):
+                return self._env_factory(self.conversation_id, None)
+            return self._env_factory
+        from pya_durable.env import LocalExecutionEnv
+        return LocalExecutionEnv(cwd=Path.cwd())
 
     async def _ensure_conversation(self) -> None:
         if not self._initialized:
@@ -119,6 +140,7 @@ class DurableConversation:
         fork_entry_id: str | None = None,
         new_conversation_id: str | None = None,
         agent: Any = None,
+        env: ExecutionEnv | None = None,
     ) -> "DurableConversation":
         target_fork_id = fork_entry_id or self.current_leaf_entry_id
         if target_fork_id is None:
@@ -152,6 +174,8 @@ class DurableConversation:
             current_leaf_entry_id=target_fork_id,
             compaction_threshold=self.compaction_threshold,
             auto_compact=self.auto_compact,
+            env=env if env is not None else self._env,
+            env_factory=self._env_factory,
         )
         child._initialized = True
         return child
