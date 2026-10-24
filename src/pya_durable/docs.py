@@ -1,0 +1,123 @@
+import json
+import logging
+from dataclasses import dataclass
+from typing import Any, Callable, Generic, TypeVar
+
+import aiosqlite
+
+from pya_durable.models import ConversationRecord, DurableDocRecord, utc_now_iso
+from pya_durable.storage import AioSqliteStorage
+
+logger = logging.getLogger("pya_durable.docs")
+
+T = TypeVar("T")
+
+
+@dataclass
+class DocDefinition(Generic[T]):
+    doc_type: str
+    schema: type[T]
+    version: int = 1
+    initial: Callable[[], T] | None = None
+    migrate: Callable[[int, dict[str, Any]], dict[str, Any]] | None = None
+
+
+def define_doc(
+    doc_type: str,
+    schema: type[T],
+    version: int = 1,
+    initial: Callable[[], T] | None = None,
+    migrate: Callable[[int, dict[str, Any]], dict[str, Any]] | None = None,
+) -> DocDefinition[T]:
+    effective_initial = initial
+    if effective_initial is None:
+        effective_initial = lambda: schema()  # type: ignore[call-arg]
+    return DocDefinition(
+        doc_type=doc_type,
+        schema=schema,
+        version=version,
+        initial=effective_initial,
+        migrate=migrate,
+    )
+
+
+class DocumentManager:
+    @staticmethod
+    async def get_doc(
+        storage: AioSqliteStorage,
+        doc_def: DocDefinition[T],
+        conversation_id: str,
+        doc_id: str = "default",
+        conn: aiosqlite.Connection | None = None,
+    ) -> T:
+        record = await storage.get_durable_doc(doc_id, conversation_id, conn=conn)
+        if record is None:
+            if doc_def.initial is not None:
+                return doc_def.initial()
+            return doc_def.schema()  # type: ignore[call-arg]
+
+        data = json.loads(record.data_json)
+        current_version = record.version
+
+        if current_version < doc_def.version and doc_def.migrate is not None:
+            data = doc_def.migrate(current_version, data)
+            current_version = doc_def.version
+            migrated_record = DurableDocRecord(
+                doc_id=doc_id,
+                conversation_id=conversation_id,
+                version=current_version,
+                doc_type=doc_def.doc_type,
+                data_json=json.dumps(data),
+                updated_at=utc_now_iso(),
+            )
+            await storage.upsert_durable_doc(migrated_record, conn=conn)
+
+        schema = doc_def.schema
+        if hasattr(schema, "model_validate"):
+            return schema.model_validate(data)  # type: ignore[no-any-return]
+        if isinstance(data, dict):
+            try:
+                return schema(**data)  # type: ignore[no-any-return]
+            except TypeError:
+                pass
+        return data  # type: ignore[no-any-return]
+
+    @staticmethod
+    async def set_doc(
+        storage: AioSqliteStorage,
+        doc_def: DocDefinition[T],
+        conversation_id: str,
+        value: T,
+        doc_id: str = "default",
+        conn: aiosqlite.Connection | None = None,
+    ) -> None:
+        conv = await storage.get_conversation(conversation_id, conn=conn)
+        if conv is None:
+            await storage.insert_conversation(
+                ConversationRecord(
+                    conversation_id=conversation_id,
+                    agent_config_json="{}",
+                ),
+                conn=conn,
+            )
+
+        if hasattr(value, "model_dump_json"):
+            data_json = value.model_dump_json()
+        elif hasattr(value, "model_dump"):
+            data_json = json.dumps(value.model_dump())
+        elif isinstance(value, (dict, list, str, int, float, bool)):
+            data_json = json.dumps(value)
+        elif hasattr(value, "__dict__"):
+            data_json = json.dumps(value.__dict__)
+        else:
+            data_json = json.dumps(value)
+
+        record = DurableDocRecord(
+            doc_id=doc_id,
+            conversation_id=conversation_id,
+            version=doc_def.version,
+            doc_type=doc_def.doc_type,
+            data_json=data_json,
+            updated_at=utc_now_iso(),
+        )
+        await storage.upsert_durable_doc(record, conn=conn)

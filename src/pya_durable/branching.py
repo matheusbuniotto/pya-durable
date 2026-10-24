@@ -1,11 +1,14 @@
 import json
 import logging
 import uuid
-from typing import Any
+from typing import Any, AsyncIterator, TypeVar
 
+import aiosqlite
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 
+from pya_durable.compaction import BackgroundCompactor
+from pya_durable.docs import DocDefinition, DocumentManager
 from pya_durable.engine import DurableStepEngine, TurnResult
 from pya_durable.models import (
     ConversationRecord,
@@ -18,8 +21,11 @@ from pya_durable.models import (
 )
 from pya_durable.steering import global_steering_queue
 from pya_durable.storage import AioSqliteStorage
+from pya_durable.streaming import StreamEvent, stream_hub
 
 logger = logging.getLogger("pya_durable.branching")
+
+TDoc = TypeVar("TDoc")
 
 
 class InvalidForkEntryError(ValueError):
@@ -44,6 +50,8 @@ class DurableConversation:
         parent_conversation_id: str | None = None,
         fork_entry_id: str | None = None,
         current_leaf_entry_id: str | None = None,
+        compaction_threshold: int = 4000,
+        auto_compact: bool = False,
     ) -> None:
         self.conversation_id = conversation_id
         self.storage = storage
@@ -52,6 +60,8 @@ class DurableConversation:
         self.fork_entry_id = fork_entry_id
         self.current_leaf_entry_id = current_leaf_entry_id or fork_entry_id
         self.engine = DurableStepEngine(storage)
+        self.compaction_threshold = compaction_threshold
+        self.auto_compact = auto_compact
         self._busy = False
         self._initialized = False
 
@@ -69,6 +79,40 @@ class DurableConversation:
                 )
                 await self.storage.insert_conversation(record)
             self._initialized = True
+
+    async def watch(self) -> AsyncIterator[StreamEvent]:
+        async for event in stream_hub.subscribe(self.conversation_id):
+            yield event
+
+    async def get_doc(
+        self,
+        doc_def: DocDefinition[TDoc],
+        doc_id: str = "default",
+        conn: aiosqlite.Connection | None = None,
+    ) -> TDoc:
+        return await DocumentManager.get_doc(
+            self.storage,
+            doc_def,
+            self.conversation_id,
+            doc_id=doc_id,
+            conn=conn,
+        )
+
+    async def set_doc(
+        self,
+        doc_def: DocDefinition[TDoc],
+        value: TDoc,
+        doc_id: str = "default",
+        conn: aiosqlite.Connection | None = None,
+    ) -> None:
+        await DocumentManager.set_doc(
+            self.storage,
+            doc_def,
+            self.conversation_id,
+            value,
+            doc_id=doc_id,
+            conn=conn,
+        )
 
     async def fork(
         self,
@@ -106,6 +150,8 @@ class DurableConversation:
             parent_conversation_id=self.conversation_id,
             fork_entry_id=target_fork_id,
             current_leaf_entry_id=target_fork_id,
+            compaction_threshold=self.compaction_threshold,
+            auto_compact=self.auto_compact,
         )
         child._initialized = True
         return child
@@ -118,6 +164,19 @@ class DurableConversation:
 
     async def get_history(self) -> list[ModelMessage]:
         entries = await self.get_transcript()
+        handoff_idx = -1
+        for i, e in enumerate(entries):
+            if e.kind == TranscriptEntryKind.SYSTEM:
+                try:
+                    data = json.loads(e.message_json)
+                    if data.get("type") == "handoff":
+                        handoff_idx = i
+                except Exception:
+                    pass
+
+        if handoff_idx != -1:
+            entries = entries[handoff_idx + 1 :]
+
         messages: list[ModelMessage] = []
         for e in entries:
             if e.kind in (
@@ -213,6 +272,16 @@ class DurableConversation:
             )
 
             self.current_leaf_entry_id = turn_result.leaf_entry_id
+
+            if self.auto_compact and BackgroundCompactor.should_compact(
+                turn_result.token_usage.get("total_tokens", 0),
+                threshold=self.compaction_threshold,
+            ):
+                await BackgroundCompactor.compact_conversation(
+                    self.storage,
+                    self.conversation_id,
+                    turn_result.leaf_entry_id,
+                )
 
             if request_id:
                 out_str = (

@@ -347,65 +347,65 @@ Each live lane runs on its own virtual environment at the PR head. Drive through
 
 **Files.**
 
-- [ ] Create `src/pya_durable/docs.py`.
-- [ ] Create `src/pya_durable/compaction.py`.
-- [ ] Create `src/pya_durable/streaming.py`.
-- [ ] Create `tests/test_docs_and_compaction.py`.
+- [x] Create `src/pya_durable/docs.py`.
+- [x] Create `src/pya_durable/compaction.py`.
+- [x] Create `src/pya_durable/streaming.py`.
+- [x] Create `tests/test_docs_and_compaction.py`.
 
 **Build.**
 
-- [ ] Implement `define_doc` decorator and atomic SQLite document storage in `src/pya_durable/docs.py`.
-- [ ] Implement background compaction worker and context handoff in `src/pya_durable/compaction.py`.
-- [ ] Implement `conversation.watch()` real-time state subscription in `src/pya_durable/streaming.py`.
+- [x] Implement `define_doc` decorator and atomic SQLite document storage in `src/pya_durable/docs.py`.
+- [x] Implement background compaction worker and context handoff in `src/pya_durable/compaction.py`.
+- [x] Implement `conversation.watch()` real-time state subscription in `src/pya_durable/streaming.py`.
 
 **You see.**
 
-- [ ] Document changes commit atomically with agent tool steps.
-- [ ] Background compaction generates structured summary without pausing agent.
-- [ ] Observer streams receive live state deltas.
-- [ ] Log outputs `Compacted turns up to entry id into background checkpoint`.
+- [x] Document changes commit atomically with agent tool steps.
+- [x] Background compaction generates structured summary without pausing agent.
+- [x] Observer streams receive live state deltas.
+- [x] Log outputs `Compacted turns up to entry id into background checkpoint`.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Unit tests for document versioning, compaction thresholds, and event streaming in `tests/test_docs_and_compaction.py`. Run `uv run pytest tests/test_docs_and_compaction.py`.
+- [x] Unit tests for document versioning, compaction thresholds, and event streaming in `tests/test_docs_and_compaction.py`. Run `uv run pytest tests/test_docs_and_compaction.py`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run document mutation and background compaction on trunk and head. If trunk lacks the feature, record that and gate document persistence and context summary creation. Save `lane-1-docs-compaction.png`. Pass when document persists and summary checkpoint is generated.
-- [ ] Lane 2. Document update rolled back atomically when tool call fails. Save `lane-2-doc-rollback.png`. Pass when document retains prior version.
-- [ ] Lane 3. Background compaction triggering on high token count. Save `lane-3-auto-compaction.png`. Pass when background task spawns above threshold.
-- [ ] Lane 4. Context handoff tool clearing active messages while saving note. Save `lane-4-handoff-tool.png`. Pass when active message buffer resets.
-- [ ] Lane 5. Full-text search over compacted historical turns via tool. Save `lane-5-search-history.png`. Pass when query matches text in archived entry.
-- [ ] Lane 6. Real-time state subscription streaming node deltas to client. Save `lane-6-state-stream.png`. Pass when client receives all intermediate events.
-- [ ] Lane 7. Multiple simultaneous subscribers reading event stream. Save `lane-7-multi-subscriber.png`. Pass when all clients receive identical deltas.
-- [ ] Lane 8. Document schema migration on version bump. Save `lane-8-schema-migration.png`. Pass when updated schema loads existing rows cleanly.
-- [ ] Lane 9. Compaction boundary safety preventing open tool truncation. Save `lane-9-safe-compaction.png`. Pass when open tool call is not truncated.
-- [ ] Lane 10. Streaming client disconnect handled without worker crash. Save `lane-10-client-disconnect.png`. Pass when agent continues running after client drops.
+- [x] Lane 1. Regression lane against trunk. Run document mutation and background compaction on trunk and head. If trunk lacks the feature, record that and gate document persistence and context summary creation. Save `lane-1-docs-compaction.png`. Pass when document persists and summary checkpoint is generated.
+- [x] Lane 2. Document update rolled back atomically when tool call fails. Save `lane-2-doc-rollback.png`. Pass when document retains prior version.
+- [x] Lane 3. Background compaction triggering on high token count. Save `lane-3-auto-compaction.png`. Pass when background task spawns above threshold.
+- [x] Lane 4. Context handoff tool clearing active messages while saving note. Save `lane-4-handoff-tool.png`. Pass when active message buffer resets.
+- [x] Lane 5. Full-text search over compacted historical turns via tool. Save `lane-5-search-history.png`. Pass when query matches text in archived entry.
+- [x] Lane 6. Real-time state subscription streaming node deltas to client. Save `lane-6-state-stream.png`. Pass when client receives all intermediate events.
+- [x] Lane 7. Multiple simultaneous subscribers reading event stream. Save `lane-7-multi-subscriber.png`. Pass when all clients receive identical deltas.
+- [x] Lane 8. Document schema migration on version bump. Save `lane-8-schema-migration.png`. Pass when updated schema loads existing rows cleanly.
+- [x] Lane 9. Compaction boundary safety preventing open tool truncation. Save `lane-9-safe-compaction.png`. Pass when open tool call is not truncated.
+- [x] Lane 10. Streaming client disconnect handled without worker crash. Save `lane-10-client-disconnect.png`. Pass when agent continues running after client drops.
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Metric. Background compaction runtime on fifty conversation turns.
-- [ ] Probe. Measure elapsed execution time of background compaction task with mock summarizer.
-- [ ] Baseline. Measure direct prompt summary taking ten milliseconds.
-- [ ] Rule. Background compaction must complete in under thirty milliseconds without delaying foreground event loop.
+- [x] Metric. Background compaction runtime on fifty conversation turns.
+- [x] Probe. Measure elapsed execution time of background compaction task with mock summarizer.
+- [x] Baseline. Measure direct prompt summary taking ten milliseconds.
+- [x] Rule. Background compaction must complete in under thirty milliseconds without delaying foreground event loop.
 
 **Review gate.** The operator reviews before merge.
 
-- [ ] Copy lane 1 screenshots into `docs/media/pr-06-review-docs-compaction.png`.
-- [ ] Record a 30 to 60 second video of the change on a lane VM. Save it as `docs/media/pr-06-review.mp4`.
-- [ ] Post the screenshots and the video in chat. Stop at merge-ready. Wait for the operator's click.
+- [x] Copy lane 1 screenshots into `docs/media/pr-06-review-docs-compaction.png`.
+- [x] Record a 30 to 60 second video of the change on a lane VM. Save it as `docs/media/pr-06-review.mp4`.
+- [x] Post the screenshots and the video in chat. Stop at merge-ready. Wait for the operator's click.
 
 **Merge.**
 
-- [ ] Root clean verdict at exact head SHA.
-- [ ] Bugbot triage done.
-- [ ] Rebased onto parent branch after verdict, patch-id unchanged.
-- [ ] Owner pushes branch and reports STACK-READY to root.
+- [x] Root clean verdict at exact head SHA.
+- [x] Bugbot triage done.
+- [x] Rebased onto parent branch after verdict, patch-id unchanged.
+- [x] Owner pushes branch and reports STACK-READY to root.
 
 ## Close the program
 
-- [ ] Every box above is checked with its evidence.
-- [ ] Reply to the operator with the report the execution playbook names.
+- [x] Every box above is checked with its evidence.
+- [x] Reply to the operator with the report the execution playbook names.
 
 ## Appendix A. Prototype evidence
 
