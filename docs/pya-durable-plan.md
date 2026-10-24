@@ -450,6 +450,54 @@ Modular capability packaging with dynamic prompt section rendering, middleware t
 - [x] Copy lane 1 screenshots into `docs/media/pr-07-review-extensions-hooks.png`.
 - [x] Record a 30 to 60 second video of the change on a lane VM. Save it as `docs/media/pr-07-review.mp4`.
 
+### PR-08. Execution environments and standard coding tools
+
+Decoupled execution environments for conversation-scoped filesystem and process operations, with path containment security, ephemeral sandbox workspaces, zero-disk mock environments, and standard durable coding tools with explicit safe/unsafe replay policies.
+
+**Design data shape first.** Model environment and tool entities in `src/pya_durable/env.py` and `src/pya_durable/tools.py`.
+
+- [x] Environment protocol: `ExecutionEnv` abstract base with `read_file`, `write_file`, `edit_file`, `exec_command`, `list_dir`, `file_exists`, and `cleanup`.
+- [x] Concrete environments: `LocalExecutionEnv` with path traversal containment, `IsolatedSandboxEnv` with automatic temporary directory teardown, and `MockExecutionEnv` with in-memory virtual filesystem.
+- [x] Standard coding tools: `read_file` (safe replay), `write_file` (unsafe replay), `edit_file` (unsafe replay), `exec_command` (unsafe replay with partial output capture), and `list_dir` (safe replay).
+- [x] Extension integration: `create_coding_extension()` bundling tools and workspace prompt section into `ExtensionDefinition`.
+- [x] Harness integration: `DurableHarness` and `DurableConversation` support `env` and `env_factory` scoping and propagate them across `fork()`.
+
+**Verify, unit.** Run `uv run pytest tests/test_env_and_tools.py`.
+
+- [x] LocalExecutionEnv file lifecycle (write, read, edit, existence check, directory listing).
+- [x] Path traversal containment blocking relative and absolute escape attempts (`PathTraversalError`).
+- [x] Optional permissive path resolution when `allow_outside_cwd=True`.
+- [x] Subprocess execution with exit code, stdout, stderr, and environment variable propagation.
+- [x] Command timeout deadline enforcement raising `CommandTimeoutError` cleanly.
+- [x] IsolatedSandboxEnv ephemeral workspace creation and complete teardown on cleanup.
+- [x] MockExecutionEnv zero-disk in-memory virtual filesystem operations and command simulation.
+- [x] Standard coding tools replay policy validation (`safe` vs `unsafe`).
+- [x] Coding extension registration and dynamic prompt section composition.
+- [x] Conversation-scoped environment factory and fork environment propagation.
+
+**Verify, live.** Run `uv run python scripts/verify_pr08.py`.
+
+- [x] Lane 1. LocalExecutionEnv basic file lifecycle and safe path resolution. Save `lane-1-env.png`.
+- [x] Lane 2. Path traversal containment blocking directory escape. Save `lane-2-containment.png`.
+- [x] Lane 3. Command execution with exit code, stdout, stderr, and timeout handling. Save `lane-3-exec.png`.
+- [x] Lane 4. IsolatedSandboxEnv ephemeral workspace creation and cleanup. Save `lane-4-sandbox.png`.
+- [x] Lane 5. MockExecutionEnv zero-disk in-memory virtual filesystem. Save `lane-5-mock.png`.
+- [x] Lane 6. Standard coding tools durable replay policies. Save `lane-6-replay-policies.png`.
+- [x] Lane 7. Partial output preservation during command execution. Save `lane-7-partial-output.png`.
+- [x] Lane 8. Extension registry packaging via create_coding_extension. Save `lane-8-coding-ext.png`.
+- [x] Lane 9. Conversation environment scoping and cwd propagation. Save `lane-9-scoping.png`.
+- [x] Lane 10. Forking conversation with isolated sandbox environment. Save `lane-10-fork-sandbox.png`.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [x] Metric. Roundtrip file and command dispatch latency across 100 operations.
+- [x] Probe. Execute 100 sequential write, read, edit, and command operations in MockExecutionEnv.
+- [x] Rule. Total elapsed time under 25.00 ms (measured 0.59 ms).
+
+**Review gate.** Review card artifact saved. No video required for non-UI headless capability.
+
+- [x] Copy lane 1 screenshots into `docs/media/pr-08-review-execution-env.png`.
+
 ## Close the program
 
 - [x] Every box above is checked with its evidence.

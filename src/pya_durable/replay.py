@@ -122,6 +122,7 @@ def validate_replay_policy(replay: str | ReplayPolicy) -> ReplayPolicy:
 def durable_tool(
     replay: str | ReplayPolicy | Callable[..., Any] = ReplayPolicy.SAFE,
     timeout_seconds: float | None = None,
+    name: str | None = None,
 ) -> Any:
     if callable(replay) and not isinstance(replay, (str, ReplayPolicy)):
         actual_fn = replay
@@ -131,6 +132,7 @@ def durable_tool(
             actual_fn,
             policy=policy,
             timeout_seconds=timeout_seconds,
+            name=name,
         )
 
     policy = validate_replay_policy(replay)
@@ -140,6 +142,7 @@ def durable_tool(
             fn,
             policy=policy,
             timeout_seconds=timeout_seconds,
+            name=name,
         )
 
     return decorator
@@ -149,7 +152,9 @@ def _create_tool_wrapper(
     fn: Callable[..., Any],
     policy: ReplayPolicy,
     timeout_seconds: float | None,
+    name: str | None = None,
 ) -> Any:
+    tool_name = name if name is not None else fn.__name__
     is_async = inspect.iscoroutinefunction(fn)
 
     if is_async:
@@ -171,7 +176,7 @@ def _create_tool_wrapper(
                 }
 
             call_info = ToolCallInfo(
-                name=fn.__name__,
+                name=tool_name,
                 args=args_dict,
                 conversation_id=ctx.conversation_id if ctx else None,
                 task_id=ctx.task_id if ctx else None,
@@ -187,13 +192,13 @@ def _create_tool_wrapper(
                 if ctx is not None:
                     invocation_id = f"inv-{uuid.uuid4().hex[:16]}"
                     ctx.last_invocation_id = invocation_id
-                    ctx.last_tool_name = fn.__name__
+                    ctx.last_tool_name = tool_name
                     args_json = _serialize_arguments(fn, *args, **kwargs)
                     record = ToolInvocationRecord(
                         invocation_id=invocation_id,
                         task_id=ctx.task_id,
                         conversation_id=ctx.conversation_id,
-                        tool_name=fn.__name__,
+                        tool_name=tool_name,
                         args_json=args_json,
                         replay_policy=policy,
                         status=ToolInvocationStatus.FAILED,
@@ -223,14 +228,14 @@ def _create_tool_wrapper(
 
             invocation_id = f"inv-{uuid.uuid4().hex[:16]}"
             ctx.last_invocation_id = invocation_id
-            ctx.last_tool_name = fn.__name__
+            ctx.last_tool_name = tool_name
             args_json = _serialize_arguments(fn, *exec_args, **exec_kwargs)
 
             record = ToolInvocationRecord(
                 invocation_id=invocation_id,
                 task_id=ctx.task_id,
                 conversation_id=ctx.conversation_id,
-                tool_name=fn.__name__,
+                tool_name=tool_name,
                 args_json=args_json,
                 replay_policy=policy,
                 status=ToolInvocationStatus.STARTED,
@@ -273,7 +278,7 @@ def _create_tool_wrapper(
                 }
 
             call_info = ToolCallInfo(
-                name=fn.__name__,
+                name=tool_name,
                 args=args_dict,
                 conversation_id=ctx.conversation_id if ctx else None,
                 task_id=ctx.task_id if ctx else None,
@@ -289,13 +294,13 @@ def _create_tool_wrapper(
                 if ctx is not None:
                     invocation_id = f"inv-{uuid.uuid4().hex[:16]}"
                     ctx.last_invocation_id = invocation_id
-                    ctx.last_tool_name = fn.__name__
+                    ctx.last_tool_name = tool_name
                     args_json = _serialize_arguments(fn, *args, **kwargs)
                     record = ToolInvocationRecord(
                         invocation_id=invocation_id,
                         task_id=ctx.task_id,
                         conversation_id=ctx.conversation_id,
-                        tool_name=fn.__name__,
+                        tool_name=tool_name,
                         args_json=args_json,
                         replay_policy=policy,
                         status=ToolInvocationStatus.FAILED,
@@ -326,14 +331,14 @@ def _create_tool_wrapper(
 
             invocation_id = f"inv-{uuid.uuid4().hex[:16]}"
             ctx.last_invocation_id = invocation_id
-            ctx.last_tool_name = fn.__name__
+            ctx.last_tool_name = tool_name
             args_json = _serialize_arguments(fn, *exec_args, **exec_kwargs)
 
             record = ToolInvocationRecord(
                 invocation_id=invocation_id,
                 task_id=ctx.task_id,
                 conversation_id=ctx.conversation_id,
-                tool_name=fn.__name__,
+                tool_name=tool_name,
                 args_json=args_json,
                 replay_policy=policy,
                 status=ToolInvocationStatus.STARTED,
@@ -363,10 +368,12 @@ def _create_tool_wrapper(
                     pass
                 raise
 
+    wrapper.__name__ = tool_name
+    wrapper.name = tool_name
     wrapper._is_durable_tool = True  # type: ignore[attr-defined]
     wrapper.replay_policy = policy  # type: ignore[attr-defined]
     wrapper.timeout_seconds = timeout_seconds  # type: ignore[attr-defined]
     wrapper.raw_func = fn  # type: ignore[attr-defined]
 
-    TOOL_REGISTRY[fn.__name__] = wrapper
+    TOOL_REGISTRY[tool_name] = wrapper
     return wrapper
