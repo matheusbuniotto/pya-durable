@@ -9,6 +9,12 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Callable, TypeVar
 
+from pya_durable.extensions import (
+    HookContext,
+    HookDecision,
+    ToolCallInfo,
+    global_extension_registry,
+)
 from pya_durable.models import (
     ReplayPolicy,
     ToolInvocationRecord,
@@ -150,15 +156,75 @@ def _create_tool_wrapper(
         @functools.wraps(fn)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             ctx = current_durable_context.get()
+
+            try:
+                sig = inspect.signature(fn)
+                bound = sig.bind_partial(*args, **kwargs)
+                args_dict = {
+                    k: v for k, v in bound.arguments.items()
+                    if type(v).__name__ != "RunContext" and k != "ctx"
+                }
+            except Exception:
+                args_dict = {
+                    k: v for k, v in kwargs.items()
+                    if type(v).__name__ != "RunContext" and k != "ctx"
+                }
+
+            call_info = ToolCallInfo(
+                name=fn.__name__,
+                args=args_dict,
+                conversation_id=ctx.conversation_id if ctx else None,
+                task_id=ctx.task_id if ctx else None,
+            )
+            hook_ctx = HookContext(
+                conversation_id=ctx.conversation_id if ctx else None,
+                task_id=ctx.task_id if ctx else None,
+                storage=ctx.storage if ctx else None,
+            )
+
+            decision = await global_extension_registry.run_before_tool(call_info, hook_ctx)
+            if decision is not None and decision.block:
+                if ctx is not None:
+                    invocation_id = f"inv-{uuid.uuid4().hex[:16]}"
+                    ctx.last_invocation_id = invocation_id
+                    ctx.last_tool_name = fn.__name__
+                    args_json = _serialize_arguments(fn, *args, **kwargs)
+                    record = ToolInvocationRecord(
+                        invocation_id=invocation_id,
+                        task_id=ctx.task_id,
+                        conversation_id=ctx.conversation_id,
+                        tool_name=fn.__name__,
+                        args_json=args_json,
+                        replay_policy=policy,
+                        status=ToolInvocationStatus.FAILED,
+                        error_message=f"Blocked: {decision.block}",
+                    )
+                    await ctx.storage.record_tool_started(record)
+                    await ctx.storage.record_tool_failed(invocation_id, f"Blocked: {decision.block}")
+                return {"error": decision.block, "blocked": True}
+
+            if decision is not None and decision.modified_args is not None:
+                if args and type(args[0]).__name__ == "RunContext" and "ctx" not in decision.modified_args:
+                    exec_args = (args[0],)
+                    exec_kwargs = decision.modified_args
+                else:
+                    exec_args = ()
+                    exec_kwargs = decision.modified_args
+            else:
+                exec_args = args
+                exec_kwargs = kwargs
+
             if ctx is None:
                 if timeout_seconds is not None:
-                    return await asyncio.wait_for(fn(*args, **kwargs), timeout=timeout_seconds)
-                return await fn(*args, **kwargs)
+                    res = await asyncio.wait_for(fn(*exec_args, **exec_kwargs), timeout=timeout_seconds)
+                else:
+                    res = await fn(*exec_args, **exec_kwargs)
+                return await global_extension_registry.run_after_tool(call_info, res, hook_ctx)
 
             invocation_id = f"inv-{uuid.uuid4().hex[:16]}"
             ctx.last_invocation_id = invocation_id
             ctx.last_tool_name = fn.__name__
-            args_json = _serialize_arguments(fn, *args, **kwargs)
+            args_json = _serialize_arguments(fn, *exec_args, **exec_kwargs)
 
             record = ToolInvocationRecord(
                 invocation_id=invocation_id,
@@ -173,13 +239,14 @@ def _create_tool_wrapper(
 
             try:
                 if timeout_seconds is not None:
-                    res = await asyncio.wait_for(fn(*args, **kwargs), timeout=timeout_seconds)
+                    res = await asyncio.wait_for(fn(*exec_args, **exec_kwargs), timeout=timeout_seconds)
                 else:
-                    res = await fn(*args, **kwargs)
+                    res = await fn(*exec_args, **exec_kwargs)
 
-                result_json = _serialize_result(res)
+                sanitized = await global_extension_registry.run_after_tool(call_info, res, hook_ctx)
+                result_json = _serialize_result(sanitized)
                 await ctx.storage.record_tool_completed(invocation_id, result_json)
-                return res
+                return sanitized
             except asyncio.TimeoutError:
                 msg = f"Tool invocation timed out after {timeout_seconds}s"
                 await ctx.storage.record_tool_failed(invocation_id, msg)
@@ -191,13 +258,76 @@ def _create_tool_wrapper(
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             ctx = current_durable_context.get()
+
+            try:
+                sig = inspect.signature(fn)
+                bound = sig.bind_partial(*args, **kwargs)
+                args_dict = {
+                    k: v for k, v in bound.arguments.items()
+                    if type(v).__name__ != "RunContext" and k != "ctx"
+                }
+            except Exception:
+                args_dict = {
+                    k: v for k, v in kwargs.items()
+                    if type(v).__name__ != "RunContext" and k != "ctx"
+                }
+
+            call_info = ToolCallInfo(
+                name=fn.__name__,
+                args=args_dict,
+                conversation_id=ctx.conversation_id if ctx else None,
+                task_id=ctx.task_id if ctx else None,
+            )
+            hook_ctx = HookContext(
+                conversation_id=ctx.conversation_id if ctx else None,
+                task_id=ctx.task_id if ctx else None,
+                storage=ctx.storage if ctx else None,
+            )
+
+            decision = global_extension_registry.run_before_tool_sync(call_info, hook_ctx)
+            if decision is not None and decision.block:
+                if ctx is not None:
+                    invocation_id = f"inv-{uuid.uuid4().hex[:16]}"
+                    ctx.last_invocation_id = invocation_id
+                    ctx.last_tool_name = fn.__name__
+                    args_json = _serialize_arguments(fn, *args, **kwargs)
+                    record = ToolInvocationRecord(
+                        invocation_id=invocation_id,
+                        task_id=ctx.task_id,
+                        conversation_id=ctx.conversation_id,
+                        tool_name=fn.__name__,
+                        args_json=args_json,
+                        replay_policy=policy,
+                        status=ToolInvocationStatus.FAILED,
+                        error_message=f"Blocked: {decision.block}",
+                    )
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(ctx.storage.record_tool_started(record))
+                        loop.create_task(ctx.storage.record_tool_failed(invocation_id, f"Blocked: {decision.block}"))
+                    except RuntimeError:
+                        pass
+                return {"error": decision.block, "blocked": True}
+
+            if decision is not None and decision.modified_args is not None:
+                if args and type(args[0]).__name__ == "RunContext" and "ctx" not in decision.modified_args:
+                    exec_args = (args[0],)
+                    exec_kwargs = decision.modified_args
+                else:
+                    exec_args = ()
+                    exec_kwargs = decision.modified_args
+            else:
+                exec_args = args
+                exec_kwargs = kwargs
+
             if ctx is None:
-                return fn(*args, **kwargs)
+                res = fn(*exec_args, **exec_kwargs)
+                return global_extension_registry.run_after_tool_sync(call_info, res, hook_ctx)
 
             invocation_id = f"inv-{uuid.uuid4().hex[:16]}"
             ctx.last_invocation_id = invocation_id
             ctx.last_tool_name = fn.__name__
-            args_json = _serialize_arguments(fn, *args, **kwargs)
+            args_json = _serialize_arguments(fn, *exec_args, **exec_kwargs)
 
             record = ToolInvocationRecord(
                 invocation_id=invocation_id,
@@ -216,14 +346,15 @@ def _create_tool_wrapper(
                 pass
 
             try:
-                res = fn(*args, **kwargs)
-                result_json = _serialize_result(res)
+                res = fn(*exec_args, **exec_kwargs)
+                sanitized = global_extension_registry.run_after_tool_sync(call_info, res, hook_ctx)
+                result_json = _serialize_result(sanitized)
                 try:
                     loop = asyncio.get_running_loop()
                     loop.create_task(ctx.storage.record_tool_completed(invocation_id, result_json))
                 except RuntimeError:
                     pass
-                return res
+                return sanitized
             except Exception as exc:
                 try:
                     loop = asyncio.get_running_loop()

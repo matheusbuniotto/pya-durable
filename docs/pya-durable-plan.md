@@ -402,6 +402,54 @@ Each live lane runs on its own virtual environment at the PR head. Drive through
 - [x] Rebased onto parent branch after verdict, patch-id unchanged.
 - [x] Owner pushes branch and reports STACK-READY to root.
 
+### PR-07. Extensions registry, dynamic prompt sections, tool wrapping, and lifecycle hooks
+
+Modular capability packaging with dynamic prompt section rendering, middleware tool wrapping, pre-execution blocking, argument rewriting, output redaction, and atomic extension hot-reloading.
+
+**Design data shape first.** Model extension entities in `src/pya_durable/extensions.py`.
+
+- [x] Extension entities: `PromptSection`, `ToolWrapper`, `HookDecision`, `ToolCallInfo`, `ModelCallInfo`, `HookContext`, `SectionContext`, `LifecycleHook`, `ExtensionDefinition`.
+- [x] Extension registry: `ExtensionRegistry` with `install()`, `uninstall()`, `resolve_tools()`, `render_prompt_sections()`, and lifecycle hook runners.
+- [x] Replay hook integration: `_create_tool_wrapper` intercepts tool calls with pre-execution block/rewrite policies and post-execution output redaction.
+- [x] Harness integration: `DurableHarness` exposes extension installation methods and dynamically renders prompt sections upon turn submission.
+
+**Verify, unit.** Run `uv run pytest tests/test_extensions.py`.
+
+- [x] Extension registration, enumeration, and clean de-registration.
+- [x] Tool replacement and resolution precedence across extension chain.
+- [x] Dynamic multi-section prompt composition with strict priority ordering.
+- [x] Non-invasive tool wrapping with invocation counting and latency tracking.
+- [x] Pre-execution guard policy blocking disallowed operations before storage commit.
+- [x] Argument normalization and dynamic parameter rewriting via before-tool hook.
+- [x] Post-execution data sanitization and output redaction across results.
+- [x] Fault isolation guarantee across flaky and crashing extension hooks.
+- [x] Hot-reloading and atomic extension upgrades in-flight.
+- [x] End-to-end multi-extension DurableHarness turn integration.
+
+**Verify, live.** Run `uv run python scripts/verify_pr07.py`.
+
+- [x] Lane 1. Extension registry registration, enumeration, and clean de-registration. Save `lane-1-lifecycle.png`.
+- [x] Lane 2. Tool replacement and resolution precedence across extension chain. Save `lane-2-tool-precedence.png`.
+- [x] Lane 3. Dynamic multi-section prompt composition with strict priority ordering. Save `lane-3-prompt-sections.png`.
+- [x] Lane 4. Non-invasive tool wrapping with invocation counting and latency tracking. Save `lane-4-tool-wrapping.png`.
+- [x] Lane 5. Pre-execution guard policy blocking disallowed operations before storage commit. Save `lane-5-hook-blocking.png`.
+- [x] Lane 6. Argument normalization and dynamic parameter rewriting via before-tool hook. Save `lane-6-arg-rewriting.png`.
+- [x] Lane 7. Post-execution data sanitization and output redaction across results. Save `lane-7-output-redaction.png`.
+- [x] Lane 8. Fault isolation guarantee across flaky and crashing extension hooks. Save `lane-8-fault-isolation.png`.
+- [x] Lane 9. Hot-reloading and atomic extension upgrades in-flight. Save `lane-9-hot-reloading.png`.
+- [x] Lane 10. End-to-end multi-extension DurableHarness turn integration. Save `lane-10-multi-extension-harness.png`.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [x] Metric. Extension dispatch runtime across 100 sections and hooks.
+- [x] Probe. Evaluate 100 dynamic prompt sections and 100 lifecycle hooks.
+- [x] Rule. Total elapsed time under 20.00 ms (measured 0.35 ms).
+
+**Review gate.** The operator reviews before merge.
+
+- [x] Copy lane 1 screenshots into `docs/media/pr-07-review-extensions-hooks.png`.
+- [x] Record a 30 to 60 second video of the change on a lane VM. Save it as `docs/media/pr-07-review.mp4`.
+
 ## Close the program
 
 - [x] Every box above is checked with its evidence.
