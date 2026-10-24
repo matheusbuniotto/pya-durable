@@ -178,52 +178,52 @@ Each live lane runs on its own virtual environment at the PR head. Drive through
 
 **Files.**
 
-- [ ] Create `src/pya_durable/replay.py`.
-- [ ] Create `src/pya_durable/recovery.py`.
-- [ ] Create `tests/test_recovery.py`.
+- [x] Create `src/pya_durable/replay.py`.
+- [x] Create `src/pya_durable/recovery.py`.
+- [x] Create `tests/test_recovery.py`.
 
 **Build.**
 
-- [ ] Implement `@durable_tool` decorator with replay policy parameter in `src/pya_durable/replay.py`.
-- [ ] Implement `Harness.resume()` scanning running tasks and reconciling interrupted tool invocations in `src/pya_durable/recovery.py`.
+- [x] Implement `@durable_tool` decorator with replay policy parameter in `src/pya_durable/replay.py`.
+- [x] Implement `Harness.resume()` scanning running tasks and reconciling interrupted tool invocations in `src/pya_durable/recovery.py`.
 
 **You see.**
 
-- [ ] Crash simulation resumes and re-executes safe tools while sealing unsafe tools.
-- [ ] Log outputs `Reconciliation finished, resumed task id from phase`.
+- [x] Crash simulation resumes and re-executes safe tools while sealing unsafe tools.
+- [x] Log outputs `Reconciliation finished, resumed task id from phase`.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Unit tests for safe versus unsafe replay policies and resumption logic in `tests/test_recovery.py`. Run `uv run pytest tests/test_recovery.py`.
+- [x] Unit tests for safe versus unsafe replay policies and resumption logic in `tests/test_recovery.py`. Run `uv run pytest tests/test_recovery.py`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Simulate crash during tool execution at trunk and head. If trunk lacks the feature, record that and gate crash recovery state reconciliation. Save `lane-1-crash-recovery.png`. Pass when task resumes and completes successfully.
-- [ ] Lane 2. Safe read tool replay after process termination. Save `lane-2-safe-tool.png`. Pass when tool reruns and stores result.
-- [ ] Lane 3. Unsafe mutating tool interrupted state recording. Save `lane-3-unsafe-tool.png`. Pass when tool is not re-executed and marked interrupted.
-- [ ] Lane 4. Request ID deduplication on retry submission. Save `lane-4-idempotent-submit.png`. Pass when second submission returns original task result.
-- [ ] Lane 5. Multiple in-flight tasks recovered in parallel during boot. Save `lane-5-parallel-recovery.png`. Pass when all running tasks transition to valid state.
-- [ ] Lane 6. Partial tool output preserved across crash. Save `lane-6-partial-output.png`. Pass when streamed partial text is retrievable.
-- [ ] Lane 7. Tool timeout during replay handled gracefully. Save `lane-7-tool-timeout.png`. Pass when timeout marks tool invocation failed.
-- [ ] Lane 8. Process kill during model request generation. Save `lane-8-kill-model-req.png`. Pass when model request regenerates cleanly on restart.
-- [ ] Lane 9. Recovery with clean database containing zero incomplete tasks. Save `lane-9-noop-recovery.png`. Pass when resume executes as a clean no-op.
-- [ ] Lane 10. Replay policy validation rejecting unknown policy string. Save `lane-10-invalid-policy.png`. Pass when invalid policy raises configuration error.
+- [x] Lane 1. Regression lane against trunk. Simulate crash during tool execution at trunk and head. If trunk lacks the feature, record that and gate crash recovery state reconciliation. Save `lane-1-crash-recovery.png`. Pass when task resumes and completes successfully.
+- [x] Lane 2. Safe read tool replay after process termination. Save `lane-2-safe-tool.png`. Pass when tool reruns and stores result.
+- [x] Lane 3. Unsafe mutating tool interrupted state recording. Save `lane-3-unsafe-tool.png`. Pass when tool is not re-executed and marked interrupted.
+- [x] Lane 4. Request ID deduplication on retry submission. Save `lane-4-idempotent-submit.png`. Pass when second submission returns original task result.
+- [x] Lane 5. Multiple in-flight tasks recovered in parallel during boot. Save `lane-5-parallel-recovery.png`. Pass when all running tasks transition to valid state.
+- [x] Lane 6. Partial tool output preserved across crash. Save `lane-6-partial-output.png`. Pass when streamed partial text is retrievable.
+- [x] Lane 7. Tool timeout during replay handled gracefully. Save `lane-7-tool-timeout.png`. Pass when timeout marks tool invocation failed.
+- [x] Lane 8. Process kill during model request generation. Save `lane-8-kill-model-req.png`. Pass when model request regenerates cleanly on restart.
+- [x] Lane 9. Recovery with clean database containing zero incomplete tasks. Save `lane-9-noop-recovery.png`. Pass when resume executes as a clean no-op.
+- [x] Lane 10. Replay policy validation rejecting unknown policy string. Save `lane-10-invalid-policy.png`. Pass when invalid policy raises configuration error.
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Metric. Time required to scan and reconcile one hundred interrupted tool calls at boot.
-- [ ] Probe. Measure execution duration of `Harness.resume()` over database preloaded with one hundred started tool rows.
-- [ ] Baseline. Measure empty database boot time of two milliseconds.
-- [ ] Rule. Reconciling one hundred interrupted invocations must complete within fifty milliseconds.
+- [x] Metric. Time required to scan and reconcile one hundred interrupted tool calls at boot.
+- [x] Probe. Measure execution duration of `Harness.resume()` over database preloaded with one hundred started tool rows.
+- [x] Baseline. Measure empty database boot time of two milliseconds.
+- [x] Rule. Reconciling one hundred interrupted invocations must complete within fifty milliseconds.
 
 **Review gate.** None. PR-03 is not review-gated.
 
 **Merge.**
 
-- [ ] Root clean verdict at exact head SHA.
-- [ ] Bugbot triage done.
-- [ ] Rebased onto parent branch after verdict, patch-id unchanged.
-- [ ] Owner pushes branch and reports STACK-READY to root.
+- [x] Root clean verdict at exact head SHA.
+- [x] Bugbot triage done.
+- [x] Rebased onto parent branch after verdict, patch-id unchanged.
+- [x] Owner pushes branch and reports STACK-READY to root.
 
 ## Implement task hierarchy and subagent delegation (PR-04)
 
