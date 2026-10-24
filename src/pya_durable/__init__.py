@@ -19,17 +19,27 @@ from pya_durable.models import (
     TranscriptEntryKind,
     TranscriptEntryRecord,
 )
+from pya_durable.recovery import CrashRecoveryManager, TaskRecoveryResult
+from pya_durable.replay import (
+    ConfigurationError,
+    InvalidReplayPolicyError,
+    durable_tool,
+    set_tool_partial_output,
+)
 from pya_durable.storage import AioSqliteStorage
 
 __all__ = [
     "AioSqliteStorage",
+    "ConfigurationError",
     "ConversationId",
     "ConversationRecord",
+    "CrashRecoveryManager",
     "DocId",
     "DurableDocRecord",
     "DurableHarness",
     "DurableStepEngine",
     "EntryId",
+    "InvalidReplayPolicyError",
     "InvocationId",
     "ReplayPolicy",
     "RequestId",
@@ -38,10 +48,13 @@ __all__ = [
     "SubmissionStatus",
     "TaskId",
     "TaskRecord",
+    "TaskRecoveryResult",
     "TaskStatus",
     "ToolInvocationRecord",
     "ToolInvocationStatus",
     "TranscriptEntryKind",
     "TranscriptEntryRecord",
     "TurnResult",
+    "durable_tool",
+    "set_tool_partial_output",
 ]

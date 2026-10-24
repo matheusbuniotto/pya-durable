@@ -18,6 +18,7 @@ from pya_durable.models import (
     TranscriptEntryRecord,
     utc_now_iso,
 )
+from pya_durable.replay import durable_execution_context
 from pya_durable.storage import AioSqliteStorage
 
 logger = logging.getLogger("pya_durable.engine")
@@ -116,70 +117,75 @@ class DurableStepEngine:
         )
 
         try:
-            async with agent.iter(
-                user_prompt,
-                message_history=message_history,
-                deps=deps,
-            ) as runner:
-                async for node in runner:
-                    node_name = type(node).__name__
-                    entry_id = f"entry-{uuid.uuid4().hex[:16]}"
-                    kind, payload = self._extract_node_payload(node, user_prompt)
+            async with durable_execution_context(
+                self.storage,
+                task_id=task_id,
+                conversation_id=conversation_id,
+            ):
+                async with agent.iter(
+                    user_prompt,
+                    message_history=message_history,
+                    deps=deps,
+                ) as runner:
+                    async for node in runner:
+                        node_name = type(node).__name__
+                        entry_id = f"entry-{uuid.uuid4().hex[:16]}"
+                        kind, payload = self._extract_node_payload(node, user_prompt)
 
-                    if hasattr(node, "model_response") and hasattr(node.model_response, "usage"):
-                        u = node.model_response.usage
-                        if u is not None:
-                            in_tok = getattr(u, "input_tokens", 0) or 0
-                            out_tok = getattr(u, "output_tokens", 0) or 0
-                            cumulative_usage["input_tokens"] += in_tok
-                            cumulative_usage["output_tokens"] += out_tok
-                            cumulative_usage["total_tokens"] += (in_tok + out_tok)
+                        if hasattr(node, "model_response") and hasattr(node.model_response, "usage"):
+                            u = node.model_response.usage
+                            if u is not None:
+                                in_tok = getattr(u, "input_tokens", 0) or 0
+                                out_tok = getattr(u, "output_tokens", 0) or 0
+                                cumulative_usage["input_tokens"] += in_tok
+                                cumulative_usage["output_tokens"] += out_tok
+                                cumulative_usage["total_tokens"] += (in_tok + out_tok)
 
-                    entry = TranscriptEntryRecord(
-                        entry_id=entry_id,
-                        conversation_id=conversation_id,
-                        parent_entry_id=current_parent_id,
-                        kind=kind,
-                        message_json=payload,
-                    )
-
-                    async with self.storage.transaction():
-                        await self.storage.insert_transcript_entry(entry)
-                        state = {
-                            "last_node": node_name,
-                            "entry_id": entry_id,
-                            "usage": cumulative_usage,
-                        }
-                        await self.storage.update_task_state(
-                            task_id=task_id,
-                            status=TaskStatus.RUNNING,
-                            phase=node_name,
-                            state_json=json.dumps(state),
-                            checkpoint_json=entry_id,
+                        entry = TranscriptEntryRecord(
+                            entry_id=entry_id,
+                            conversation_id=conversation_id,
+                            parent_entry_id=current_parent_id,
+                            kind=kind,
+                            message_json=payload,
                         )
 
-                    logger.info("Node %s committed with entry id %s", node_name, entry_id)
-                    current_parent_id = entry_id
+                        async with self.storage.transaction():
+                            await self.storage.insert_transcript_entry(entry)
+                            state = {
+                                "last_node": node_name,
+                                "entry_id": entry_id,
+                                "usage": cumulative_usage,
+                            }
+                            await self.storage.update_task_state(
+                                task_id=task_id,
+                                status=TaskStatus.RUNNING,
+                                phase=node_name,
+                                state_json=json.dumps(state),
+                                checkpoint_json=entry_id,
+                            )
 
-                    yield StepNodeCommit(
-                        node_name=node_name,
-                        entry_id=entry_id,
-                        kind=kind,
-                        parent_entry_id=entry.parent_entry_id,
-                        node_data=node,
+                        logger.info("Node %s committed with entry id %s", node_name, entry_id)
+                        current_parent_id = entry_id
+
+                        yield StepNodeCommit(
+                            node_name=node_name,
+                            entry_id=entry_id,
+                            kind=kind,
+                            parent_entry_id=entry.parent_entry_id,
+                            node_data=node,
+                        )
+
+                    final_output = runner.result.output
+                    await self.storage.update_task_state(
+                        task_id=task_id,
+                        status=TaskStatus.COMPLETED,
+                        phase="completed",
+                        state_json=json.dumps({
+                            "output": str(final_output) if not hasattr(final_output, "model_dump_json") else final_output.model_dump_json(),
+                            "usage": cumulative_usage,
+                        }),
+                        checkpoint_json=current_parent_id,
                     )
-
-                final_output = runner.result.output
-                await self.storage.update_task_state(
-                    task_id=task_id,
-                    status=TaskStatus.COMPLETED,
-                    phase="completed",
-                    state_json=json.dumps({
-                        "output": str(final_output) if not hasattr(final_output, "model_dump_json") else final_output.model_dump_json(),
-                        "usage": cumulative_usage,
-                    }),
-                    checkpoint_json=current_parent_id,
-                )
 
         except Exception as exc:
             await self.storage.update_task_state(
@@ -225,108 +231,113 @@ class DurableStepEngine:
         )
 
         try:
-            async with agent.iter(
-                user_prompt,
-                message_history=message_history,
-                deps=deps,
-            ) as runner:
-                step_count = 0
-                async for node in runner:
-                    step_count += 1
-                    node_name = type(node).__name__
-                    last_node_name = node_name
-                    entry_id = f"entry-{uuid.uuid4().hex[:16]}"
-                    kind, payload = self._extract_node_payload(node, user_prompt)
+            async with durable_execution_context(
+                self.storage,
+                task_id=task_id,
+                conversation_id=conversation_id,
+            ):
+                async with agent.iter(
+                    user_prompt,
+                    message_history=message_history,
+                    deps=deps,
+                ) as runner:
+                    step_count = 0
+                    async for node in runner:
+                        step_count += 1
+                        node_name = type(node).__name__
+                        last_node_name = node_name
+                        entry_id = f"entry-{uuid.uuid4().hex[:16]}"
+                        kind, payload = self._extract_node_payload(node, user_prompt)
 
-                    if hasattr(node, "model_response") and hasattr(node.model_response, "usage"):
-                        u = node.model_response.usage
-                        if u is not None:
-                            in_tok = getattr(u, "input_tokens", 0) or 0
-                            out_tok = getattr(u, "output_tokens", 0) or 0
-                            cumulative_usage["input_tokens"] += in_tok
-                            cumulative_usage["output_tokens"] += out_tok
-                            cumulative_usage["total_tokens"] += (in_tok + out_tok)
+                        if hasattr(node, "model_response") and hasattr(node.model_response, "usage"):
+                            u = node.model_response.usage
+                            if u is not None:
+                                in_tok = getattr(u, "input_tokens", 0) or 0
+                                out_tok = getattr(u, "output_tokens", 0) or 0
+                                cumulative_usage["input_tokens"] += in_tok
+                                cumulative_usage["output_tokens"] += out_tok
+                                cumulative_usage["total_tokens"] += (in_tok + out_tok)
 
-                    entry = TranscriptEntryRecord(
-                        entry_id=entry_id,
-                        conversation_id=conversation_id,
-                        parent_entry_id=current_parent_id,
-                        kind=kind,
-                        message_json=payload,
-                    )
-
-                    async with self.storage.transaction():
-                        await self.storage.insert_transcript_entry(entry)
-                        state = {
-                            "last_node": node_name,
-                            "entry_id": entry_id,
-                            "usage": cumulative_usage,
-                        }
-                        await self.storage.update_task_state(
-                            task_id=task_id,
-                            status=TaskStatus.RUNNING,
-                            phase=node_name,
-                            state_json=json.dumps(state),
-                            checkpoint_json=entry_id,
+                        entry = TranscriptEntryRecord(
+                            entry_id=entry_id,
+                            conversation_id=conversation_id,
+                            parent_entry_id=current_parent_id,
+                            kind=kind,
+                            message_json=payload,
                         )
 
-                    logger.info("Node %s committed with entry id %s", node_name, entry_id)
-                    current_parent_id = entry_id
+                        async with self.storage.transaction():
+                            await self.storage.insert_transcript_entry(entry)
+                            state = {
+                                "last_node": node_name,
+                                "entry_id": entry_id,
+                                "usage": cumulative_usage,
+                            }
+                            await self.storage.update_task_state(
+                                task_id=task_id,
+                                status=TaskStatus.RUNNING,
+                                phase=node_name,
+                                state_json=json.dumps(state),
+                                checkpoint_json=entry_id,
+                            )
 
-                    commit = StepNodeCommit(
-                        node_name=node_name,
-                        entry_id=entry_id,
-                        kind=kind,
-                        parent_entry_id=entry.parent_entry_id,
-                        node_data=node,
-                    )
+                        logger.info("Node %s committed with entry id %s", node_name, entry_id)
+                        current_parent_id = entry_id
 
-                    if node_name == "End" and hasattr(node, "data"):
-                        extracted_output = node.data.output
+                        commit = StepNodeCommit(
+                            node_name=node_name,
+                            entry_id=entry_id,
+                            kind=kind,
+                            parent_entry_id=entry.parent_entry_id,
+                            node_data=node,
+                        )
 
-                    if on_node is not None:
-                        res = on_node(commit)
-                        if asyncio.iscoroutine(res):
-                            res = await res
-                        if res is False:
+                        if node_name == "End" and hasattr(node, "data"):
+                            extracted_output = node.data.output
+
+                        if on_node is not None:
+                            res = on_node(commit)
+                            if asyncio.iscoroutine(res):
+                                res = await res
+                            if res is False:
+                                stopped_early = True
+                                break
+
+                        if max_steps is not None and step_count >= max_steps:
                             stopped_early = True
                             break
 
-                    if max_steps is not None and step_count >= max_steps:
-                        stopped_early = True
-                        break
+                    if stopped_early:
+                        await self.storage.update_task_state(
+                            task_id=task_id,
+                            status=TaskStatus.RUNNING,
+                            phase="interrupted",
+                            state_json=json.dumps({
+                                "interrupted": True,
+                                "last_node": last_node_name,
+                                "usage": cumulative_usage,
+                            }),
+                            checkpoint_json=current_parent_id,
+                        )
+                    else:
+                        if extracted_output is None and hasattr(runner, "result") and runner.result is not None:
+                            extracted_output = runner.result.output
 
-                if stopped_early:
-                    await self.storage.update_task_state(
-                        task_id=task_id,
-                        status=TaskStatus.RUNNING,
-                        phase="interrupted",
-                        state_json=json.dumps({
-                            "interrupted": True,
-                            "last_node": last_node_name,
-                            "usage": cumulative_usage,
-                        }),
-                        checkpoint_json=current_parent_id,
-                    )
-                else:
-                    if extracted_output is None and hasattr(runner, "result") and runner.result is not None:
-                        extracted_output = runner.result.output
-
-                    out_str = (
-                        extracted_output.model_dump_json()
-                        if hasattr(extracted_output, "model_dump_json")
-                        else str(extracted_output)
-                    )
-                    await self.storage.update_task_state(
-                        task_id=task_id,
-                        status=TaskStatus.COMPLETED,
-                        phase="completed",
-                        state_json=json.dumps({
-                            "output": out_str,
-                            "usage": cumulative_usage,
-                        }),
-                        checkpoint_json=current_parent_id,
-                    )
+                        out_str = (
+                            extracted_output.model_dump_json()
+                            if hasattr(extracted_output, "model_dump_json")
+                            else str(extracted_output)
+                        )
+                        await self.storage.update_task_state(
+                            task_id=task_id,
+                            status=TaskStatus.COMPLETED,
+                            phase="completed",
+                            state_json=json.dumps({
+                                "output": out_str,
+                                "usage": cumulative_usage,
+                            }),
+                            checkpoint_json=current_parent_id,
+                        )
 
         except Exception as exc:
             await self.storage.update_task_state(
