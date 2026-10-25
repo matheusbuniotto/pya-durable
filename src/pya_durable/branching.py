@@ -3,9 +3,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from pathlib import Path
 import uuid
-from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, TypeVar
+from collections.abc import AsyncIterator, Callable
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import aiosqlite
 from pydantic_ai import Agent
@@ -15,6 +16,7 @@ from pya_durable.approvals import ApprovalManager, ApprovalRequestRecord
 from pya_durable.compaction import BackgroundCompactor
 from pya_durable.docs import DocDefinition, DocumentManager
 from pya_durable.engine import DurableStepEngine, TurnResult
+from pya_durable.memo import MemoManager
 from pya_durable.models import (
     ConversationRecord,
     SubmissionRecord,
@@ -24,13 +26,12 @@ from pya_durable.models import (
     TranscriptEntryKind,
     TranscriptEntryRecord,
 )
-from pya_durable.memo import MemoManager
+from pya_durable.providers import ModelsRegistry, global_models_registry, resolve_agent
 from pya_durable.steering import global_steering_queue
 from pya_durable.storage import DurableStorage
 from pya_durable.streaming import (
     AgentEvent,
     ConversationViewState,
-    MultiplayerPresenceHub,
     ReactiveDocumentState,
     ReactiveViewState,
     StreamEvent,
@@ -64,7 +65,7 @@ class DurableConversation:
         self,
         conversation_id: str,
         storage: DurableStorage,
-        agent: Agent[Any, Any] | None = None,
+        agent: Agent[Any, Any] | Any = None,
         parent_conversation_id: str | None = None,
         fork_entry_id: str | None = None,
         current_leaf_entry_id: str | None = None,
@@ -72,10 +73,12 @@ class DurableConversation:
         auto_compact: bool = False,
         env: ExecutionEnv | None = None,
         env_factory: Callable[[str, Path | str | None], ExecutionEnv] | ExecutionEnv | None = None,
+        models: ModelsRegistry | None = None,
     ) -> None:
         self.conversation_id = conversation_id
         self.storage = storage
-        self.agent = agent
+        self.models = models or global_models_registry
+        self.agent = resolve_agent(agent, models=self.models) if agent is not None else None
         self.parent_conversation_id = parent_conversation_id
         self.fork_entry_id = fork_entry_id
         self.current_leaf_entry_id = current_leaf_entry_id or fork_entry_id
@@ -314,7 +317,7 @@ class DurableConversation:
         new_conversation_id: str | None = None,
         agent: Any = None,
         env: ExecutionEnv | None = None,
-    ) -> "DurableConversation":
+    ) -> DurableConversation:
         target_fork_id = fork_entry_id or self.current_leaf_entry_id
         if target_fork_id is None:
             raise InvalidForkEntryError("Fork entry ID cannot be None")
@@ -326,7 +329,11 @@ class DurableConversation:
             )
 
         child_conv_id = new_conversation_id or f"conv-{uuid.uuid4().hex[:12]}"
-        child_agent = agent if agent is not None else self.agent
+        child_agent = (
+            resolve_agent(agent, models=self.models)
+            if agent is not None
+            else self.agent
+        )
 
         record = ConversationRecord(
             conversation_id=child_conv_id,
@@ -349,6 +356,7 @@ class DurableConversation:
             auto_compact=self.auto_compact,
             env=env if env is not None else self._env,
             env_factory=self._env_factory,
+            models=self.models,
         )
         child._initialized = True
         return child
@@ -409,7 +417,9 @@ class DurableConversation:
                 raise ValueError("Prompt cannot be empty")
 
         if self.agent is None:
-            raise ValueError("An agent is required to run a conversation turn")
+            self.agent = self.models.create_agent()
+        elif not isinstance(self.agent, Agent):
+            self.agent = resolve_agent(self.agent, models=self.models)
 
         await self._ensure_conversation()
 
@@ -600,3 +610,27 @@ class DurableConversation:
 
         runner = TaskRunner(self.storage)
         return await runner.wait_for_task(task_id, poll_interval=poll_interval, timeout=timeout)
+
+    run_turn = run
+
+    async def submit(
+        self,
+        prompt: str | dict[str, Any] | None = None,
+        deps: Any = None,
+        request_id: str | None = None,
+        when_busy: str | None = None,
+    ) -> Any:
+        effective_prompt = prompt
+        effective_req_id = request_id
+        if isinstance(prompt, dict):
+            effective_req_id = request_id or prompt.get("requestId") or prompt.get("request_id")
+            effective_prompt = prompt.get("content") or prompt.get("prompt") or prompt.get("input")
+        return await self.run(
+            prompt=effective_prompt,
+            deps=deps,
+            request_id=effective_req_id,
+            when_busy=when_busy,
+        )
+
+
+Conversation = DurableConversation

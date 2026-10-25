@@ -68,17 +68,59 @@ import pya_durable as pad
 
 ## Quickstart
 
-### 1. Minimal Durable Harness
+### 1. Pluggable Providers & Auth (Pi Durable Style)
+
+Easily configure credentials for OpenRouter, OpenAI, Anthropic, Gemini, Groq, or local Ollama, matching Pi Durable's clean decoupled architecture:
+
+```python
+import asyncio
+from pydantic_ai_durable import (
+    Harness,
+    SqliteStorage,
+    create_models,
+    openrouter_provider,
+    openai_provider,
+)
+
+async def main():
+    # 1. Configure pluggable providers & credentials (matching Pi Durable)
+    models = create_models()
+    models.set_provider(openrouter_provider(api_key="sk-or-..."))
+    # or models.set_provider("openai", api_key="sk-...")
+
+    # 2. Open durable harness over SQLite
+    harness = await Harness.open(SqliteStorage("agent.sqlite"), models=models)
+
+    # 3. Resume any interrupted tasks
+    await harness.resume()
+
+    # 4. Open root conversation with flexible model resolution
+    root = await harness.root({"agent": {"model": "openrouter:openai/gpt-6-luna"}})
+    # shortcuts also supported: agent="gpt-luna 6", agent="openai:gpt-4o", or Agent(...)
+
+    # 5. Submit turn with idempotent request_id
+    result = await root.submit({"content": "Summarize deployment health", "requestId": "req-001"})
+    print("Agent:", result.output)
+
+    # Clean shutdown
+    await harness.close()
+
+asyncio.run(main())
+```
+
+---
+
+### 2. Minimal Standalone Agent Harness
 
 ```python
 import asyncio
 from pydantic_ai import Agent
-from pydantic_ai_durable import DurableHarness, AioSqliteStorage
+from pydantic_ai_durable import DurableHarness, SqliteStorage
 
 async def main():
     agent = Agent("openai:gpt-4o")
 
-    async with AioSqliteStorage("agent.sqlite") as storage:
+    async with SqliteStorage("agent.sqlite") as storage:
         # Create or resume harness
         harness = DurableHarness(
             agent=agent,
@@ -98,7 +140,7 @@ asyncio.run(main())
 
 ---
 
-### 2. Durable Tools with Replay Policies
+### 3. Durable Tools with Replay Policies
 
 Declare tool replay safety to protect mutating operations from re-executing after a crash:
 
@@ -120,7 +162,7 @@ async def charge_customer(amount: int, customer_id: str) -> str:
 
 ---
 
-### 3. Durable Task Sagas with Reverse Compensation
+### 4. Durable Task Sagas with Reverse Compensation
 
 Orchestrate complex distributed workflows with parallel fan-out and automatic reverse rollback:
 
@@ -221,6 +263,8 @@ async for event in harness.watch_events():
 
 | Architectural Pillar | Pi Durable (TypeScript) | PyA Durable (Python) | Status |
 | :--- | :--- | :--- | :---: |
+| **Model Providers & Auth** | `createModels()` + `setProvider()` | `create_models()` + `*_provider()` | Complete |
+| **Harness Bootstrap** | `Harness.open()` + `resume()` | `Harness.open()` + `resume()` | Complete |
 | **Storage Engine** | Node SQLite WAL / DO | `AioSqliteStorage` (WAL mode) | Complete |
 | **Zero-Disk Storage** | `MemoryStorage` | `MemoryStorage` | Complete |
 | **Append-Only Ledger** | `JsonlStorage` | `JsonlStorage` | Complete |
@@ -248,7 +292,7 @@ async for event in harness.watch_events():
 Every pull request is verified across unit test suites, real AI provider evaluations, and end-to-end user journeys:
 
 ```bash
-# Run 139 unit & behavioral tests
+# Run 148 unit & behavioral tests
 uv run pytest
 
 # Run the 9 core behavioral evaluations (high-fidelity fallback)

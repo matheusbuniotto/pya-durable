@@ -7,6 +7,7 @@ from pya_durable.approvals import (
     approval_gate,
 )
 from pya_durable.branching import (
+    Conversation,
     DurableConversation,
     InvalidForkEntryError,
     get_branch_ancestors,
@@ -51,7 +52,7 @@ from pya_durable.extensions import (
     hook,
     wrap_tool,
 )
-from pya_durable.harness import DurableHarness
+from pya_durable.harness import DurableHarness, Harness
 from pya_durable.memo import MemoManager
 from pya_durable.models import (
     ApprovalDecision,
@@ -82,6 +83,18 @@ from pya_durable.models import (
     TranscriptEntryRecord,
     normalize_model_name,
 )
+from pya_durable.providers import (
+    ModelsRegistry,
+    anthropic_provider,
+    create_models,
+    gemini_provider,
+    global_models_registry,
+    groq_provider,
+    ollama_provider,
+    openai_provider,
+    openrouter_provider,
+    resolve_agent,
+)
 from pya_durable.recovery import CrashRecoveryManager, TaskRecoveryResult
 from pya_durable.replay import (
     ConfigurationError,
@@ -110,6 +123,7 @@ from pya_durable.storage import (
     DurableStorage,
     JsonlStorage,
     MemoryStorage,
+    SqliteStorage,
 )
 from pya_durable.streaming import (
     AgentEvent,
@@ -176,6 +190,7 @@ __all__ = [
     "ClientPresenceEvent",
     "CommandTimeoutError",
     "ConfigurationError",
+    "Conversation",
     "ConversationId",
     "ConversationRecord",
     "ConversationStreamHub",
@@ -201,6 +216,7 @@ __all__ = [
     "FileInfo",
     "FileNotFoundInEnvError",
     "GitWorktreeManager",
+    "Harness",
     "HookContext",
     "HookDecision",
     "InvalidApprovalDecisionError",
@@ -218,6 +234,7 @@ __all__ = [
     "ModelCallInfo",
     "ModelDeltaEvent",
     "ModelRequestStartedEvent",
+    "ModelsRegistry",
     "MultiplayerPresenceHub",
     "PathTraversalError",
     "PromptSection",
@@ -238,6 +255,7 @@ __all__ = [
     "SagaStepCompletedEvent",
     "SagaStepRecord",
     "SectionContext",
+    "SqliteStorage",
     "SteerInjectedEvent",
     "SteeringQueue",
     "StepNodeCommit",
@@ -266,6 +284,7 @@ __all__ = [
     "TurnCompletedEvent",
     "TurnResult",
     "TurnStartedEvent",
+    "anthropic_provider",
     "approval_gate",
     "check_cycle",
     "create_coding_extension",
@@ -274,6 +293,7 @@ __all__ = [
     "create_exec_command_tool",
     "create_handoff_tool",
     "create_list_dir_tool",
+    "create_models",
     "create_read_file_tool",
     "create_search_history_tool",
     "create_write_file_tool",
@@ -285,12 +305,19 @@ __all__ = [
     "define_task",
     "durable_execution_context",
     "durable_tool",
+    "gemini_provider",
     "get_branch_ancestors",
     "global_extension_registry",
+    "global_models_registry",
     "global_steering_queue",
+    "groq_provider",
     "hook",
     "multiplayer_hub",
     "normalize_model_name",
+    "ollama_provider",
+    "openai_provider",
+    "openrouter_provider",
+    "resolve_agent",
     "set_tool_partial_output",
     "stream_hub",
     "translate_stream_event",

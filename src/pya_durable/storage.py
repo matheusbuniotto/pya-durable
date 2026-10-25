@@ -1448,9 +1448,12 @@ class AioSqliteStorage(DurableStorage):
 from pya_durable.memory_storage import MemoryStorage
 from pya_durable.jsonl_storage import JsonlStorage
 
+SqliteStorage = AioSqliteStorage
+
 __all__ = [
     "DurableStorage",
     "AioSqliteStorage",
+    "SqliteStorage",
     "MemoryStorage",
     "JsonlStorage",
     "SCHEMA_SQL",

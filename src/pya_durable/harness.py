@@ -2,16 +2,22 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
 import uuid
-from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Generic, Sequence, TypeVar
+from collections.abc import AsyncIterator, Callable
+from pathlib import Path
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Generic,
+    TypeVar,
+)
 
 import aiosqlite
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 
 from pya_durable.approvals import ApprovalManager, ApprovalRequestRecord
-from pya_durable.branching import InvalidForkEntryError
+from pya_durable.branching import DurableConversation, InvalidForkEntryError
 from pya_durable.compaction import BackgroundCompactor
 from pya_durable.docs import DocDefinition, DocumentManager
 from pya_durable.engine import DurableStepEngine, TurnResult
@@ -21,6 +27,7 @@ from pya_durable.extensions import (
     SectionContext,
     global_extension_registry,
 )
+from pya_durable.memo import MemoManager
 from pya_durable.models import (
     ConversationRecord,
     SubmissionRecord,
@@ -29,16 +36,14 @@ from pya_durable.models import (
     TaskStatus,
     TranscriptEntryKind,
     TranscriptEntryRecord,
-    utc_now_iso,
 )
-from pya_durable.memo import MemoManager
+from pya_durable.providers import ModelsRegistry, global_models_registry, resolve_agent
 from pya_durable.recovery import CrashRecoveryManager
 from pya_durable.steering import global_steering_queue
 from pya_durable.storage import DurableStorage
 from pya_durable.streaming import (
     AgentEvent,
     ConversationViewState,
-    MultiplayerPresenceHub,
     ReactiveDocumentState,
     ReactiveViewState,
     StreamEvent,
@@ -56,8 +61,8 @@ TDoc = TypeVar("TDoc")
 class DurableHarness(Generic[TOutput]):
     def __init__(
         self,
-        agent: Agent[Any, TOutput],
-        storage: DurableStorage,
+        agent: Agent[Any, TOutput] | Any = None,
+        storage: DurableStorage | None = None,
         conversation_id: str | None = None,
         parent_conversation_id: str | None = None,
         fork_entry_id: str | None = None,
@@ -66,8 +71,17 @@ class DurableHarness(Generic[TOutput]):
         registry: ExtensionRegistry | None = None,
         env: ExecutionEnv | None = None,
         env_factory: Callable[[str, Path | str | None], ExecutionEnv] | ExecutionEnv | None = None,
+        models: ModelsRegistry | None = None,
     ) -> None:
-        self.agent = agent
+        if isinstance(agent, DurableStorage) and storage is None:
+            storage = agent
+            agent = None
+
+        if storage is None:
+            raise ValueError("A DurableStorage instance must be provided to DurableHarness")
+
+        self.models = models or global_models_registry
+        self.agent = resolve_agent(agent, models=self.models) if agent is not None else None
         self.storage = storage
         self.conversation_id = conversation_id or f"conv-{uuid.uuid4().hex[:12]}"
         self.parent_conversation_id = parent_conversation_id
@@ -81,6 +95,36 @@ class DurableHarness(Generic[TOutput]):
         self._env_factory = env_factory
         self._busy = False
         self._initialized = False
+
+    @classmethod
+    async def open(
+        cls,
+        storage: DurableStorage,
+        *,
+        models: ModelsRegistry | None = None,
+        registry: ExtensionRegistry | None = None,
+        env: ExecutionEnv | None = None,
+        env_factory: Callable[[str, Path | str | None], ExecutionEnv] | ExecutionEnv | None = None,
+        agent: Any = None,
+        conversation_id: str | None = None,
+        compaction_threshold: int = 4000,
+        auto_compact: bool = False,
+    ) -> DurableHarness[Any]:
+        await storage.init_db()
+        harness = cls(
+            agent=agent,
+            storage=storage,
+            conversation_id=conversation_id,
+            compaction_threshold=compaction_threshold,
+            auto_compact=auto_compact,
+            registry=registry,
+            env=env,
+            env_factory=env_factory,
+            models=models,
+        )
+        await harness._ensure_conversation()
+        return harness
+
 
     def get_conversation_env(
         self,
@@ -116,6 +160,85 @@ class DurableHarness(Generic[TOutput]):
 
     def uninstall_extension(self, name: str) -> None:
         self.registry.uninstall(name)
+
+    async def root(
+        self,
+        options_or_agent: Any = None,
+        *,
+        agent: Any = None,
+        cwd: Path | str | None = None,
+        env: ExecutionEnv | None = None,
+    ) -> DurableConversation:
+        target_agent = agent
+        target_cwd = cwd
+        target_env = env
+
+        if isinstance(options_or_agent, dict):
+            if "agent" in options_or_agent and target_agent is None:
+                target_agent = options_or_agent["agent"]
+            if "cwd" in options_or_agent and target_cwd is None:
+                target_cwd = options_or_agent["cwd"]
+            if "env" in options_or_agent and target_env is None:
+                target_env = options_or_agent["env"]
+            if target_agent is None and ("model" in options_or_agent or "provider" in options_or_agent):
+                target_agent = options_or_agent
+        elif options_or_agent is not None and target_agent is None:
+            target_agent = options_or_agent
+
+        resolved_agent = (
+            resolve_agent(target_agent, models=self.models)
+            if target_agent is not None
+            else self.agent
+        )
+        conv_env = target_env or self.get_conversation_env(self.conversation_id, cwd=target_cwd)
+
+        conv = DurableConversation(
+            conversation_id=self.conversation_id,
+            storage=self.storage,
+            agent=resolved_agent,
+            parent_conversation_id=self.parent_conversation_id,
+            fork_entry_id=self.fork_entry_id,
+            current_leaf_entry_id=self.current_leaf_entry_id,
+            compaction_threshold=self.compaction_threshold,
+            auto_compact=self.auto_compact,
+            env=conv_env,
+            env_factory=self._env_factory,
+            models=self.models,
+        )
+        await conv._ensure_conversation()
+        return conv
+
+    async def conversation(
+        self,
+        conversation_id: str,
+        *,
+        agent: Any = None,
+        cwd: Path | str | None = None,
+        env: ExecutionEnv | None = None,
+    ) -> DurableConversation:
+        resolved_agent = (
+            resolve_agent(agent, models=self.models)
+            if agent is not None
+            else self.agent
+        )
+        conv_env = env or self.get_conversation_env(conversation_id, cwd=cwd)
+
+        conv = DurableConversation(
+            conversation_id=conversation_id,
+            storage=self.storage,
+            agent=resolved_agent,
+            compaction_threshold=self.compaction_threshold,
+            auto_compact=self.auto_compact,
+            env=conv_env,
+            env_factory=self._env_factory,
+            models=self.models,
+        )
+        await conv._ensure_conversation()
+        return conv
+
+    async def close(self) -> None:
+        if hasattr(self.storage, "close"):
+            await self.storage.close()
 
     async def _ensure_conversation(self) -> None:
         if not self._initialized:
@@ -336,6 +459,11 @@ class DurableHarness(Generic[TOutput]):
             else:
                 raise ValueError("Prompt cannot be empty")
 
+        if self.agent is None:
+            self.agent = self.models.create_agent()
+        elif not isinstance(self.agent, Agent):
+            self.agent = resolve_agent(self.agent, models=self.models)
+
         await self._ensure_conversation()
 
         self._busy = True
@@ -528,12 +656,17 @@ class DurableHarness(Generic[TOutput]):
 
     async def submit(
         self,
-        prompt: str | None = None,
+        prompt: str | dict[str, Any] | None = None,
         deps: Any = None,
         request_id: str | None = None,
         when_busy: str | None = None,
     ) -> TurnResult[TOutput] | None:
         effective_prompt = prompt
+        effective_req_id = request_id
+        if isinstance(prompt, dict):
+            effective_req_id = request_id or prompt.get("requestId") or prompt.get("request_id")
+            effective_prompt = prompt.get("content") or prompt.get("prompt") or prompt.get("input")
+
         section_ctx = SectionContext(conversation_id=self.conversation_id)
         rendered_sections = await self.registry.render_prompt_sections(section_ctx)
         if rendered_sections:
@@ -544,9 +677,11 @@ class DurableHarness(Generic[TOutput]):
         return await self.run(
             prompt=effective_prompt,
             deps=deps,
-            request_id=request_id,
+            request_id=effective_req_id,
             when_busy=when_busy,
         )
+
+    run_turn = run
 
     async def resume(self, task_id: str | None = None) -> Any:
         manager = CrashRecoveryManager(self.storage, agent=self.agent)
@@ -594,9 +729,9 @@ class DurableHarness(Generic[TOutput]):
         self,
         fork_entry_id: str | None = None,
         new_conversation_id: str | None = None,
-        agent: Agent[Any, Any] | None = None,
+        agent: Any = None,
         env: ExecutionEnv | None = None,
-    ) -> "DurableHarness[Any]":
+    ) -> DurableHarness[Any]:
         await self._ensure_conversation()
 
         target_fork_id = fork_entry_id or self.current_leaf_entry_id
@@ -606,7 +741,11 @@ class DurableHarness(Generic[TOutput]):
                 raise InvalidForkEntryError(f"Fork entry {target_fork_id} not found")
 
         child_conv_id = new_conversation_id or f"conv-{uuid.uuid4().hex[:12]}"
-        child_agent = agent or self.agent
+        child_agent = (
+            resolve_agent(agent, models=self.models)
+            if agent is not None
+            else self.agent
+        )
 
         record = ConversationRecord(
             conversation_id=child_conv_id,
@@ -629,6 +768,10 @@ class DurableHarness(Generic[TOutput]):
             registry=self.registry,
             env=env if env is not None else self._env,
             env_factory=self._env_factory,
+            models=self.models,
         )
         child._initialized = True
         return child
+
+
+Harness = DurableHarness
