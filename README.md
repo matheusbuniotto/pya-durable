@@ -20,7 +20,10 @@
 ## 🚀 30-Second Quickstart
 
 ```bash
-pip install pydantic-ai-durable
+uv pip install pydantic-ai-durable   # or: pip install pydantic-ai-durable
+
+# Latest from GitHub (works before/without a PyPI release)
+uv pip install "git+https://github.com/matheusbuniotto/pydantic-ai-durable"
 ```
 
 Both package imports work interchangeably:
