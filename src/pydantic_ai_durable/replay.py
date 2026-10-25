@@ -10,13 +10,13 @@ from dataclasses import dataclass
 from typing import Any, AsyncIterator, Callable, TypeVar
 
 from datetime import datetime, timezone
-from pya_durable.extensions import (
+from pydantic_ai_durable.extensions import (
     HookContext,
     HookDecision,
     ToolCallInfo,
     global_extension_registry,
 )
-from pya_durable.models import (
+from pydantic_ai_durable.models import (
     ApprovalDecision,
     ApprovalRequestRecord,
     ApprovalStatus,
@@ -27,9 +27,9 @@ from pya_durable.models import (
     ToolInvocationStatus,
     utc_now_iso,
 )
-from pya_durable.storage import DurableStorage
+from pydantic_ai_durable.storage import DurableStorage
 
-logger = logging.getLogger("pya_durable.replay")
+logger = logging.getLogger("pydantic_ai_durable.replay")
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -305,7 +305,7 @@ def _create_tool_wrapper(
                     or (decision is not None and getattr(decision, "require_approval", False))
                 )
                 if needs_approval:
-                    from pya_durable.approvals import ApprovalRequiredError
+                    from pydantic_ai_durable.approvals import ApprovalRequiredError
                     prompt_template = (
                         approval_prompt
                         or getattr(fn, "_approval_prompt", None)
@@ -396,7 +396,7 @@ def _create_tool_wrapper(
                         )
                         await ctx.storage.record_tool_started(record)
                         await ctx.storage.record_tool_failed(invocation_id, msg)
-                        from pya_durable.approvals import ApprovalRejectedError
+                        from pydantic_ai_durable.approvals import ApprovalRejectedError
                         raise ApprovalRejectedError(challenge_token=appr.challenge_token, reason=reason)
                     elif appr.status == ApprovalStatus.EXPIRED:
                         msg = "Tool execution approval challenge expired."
@@ -416,11 +416,11 @@ def _create_tool_wrapper(
                         )
                         await ctx.storage.record_tool_started(record)
                         await ctx.storage.record_tool_failed(invocation_id, msg)
-                        from pya_durable.approvals import ApprovalExpiredError
+                        from pydantic_ai_durable.approvals import ApprovalExpiredError
                         raise ApprovalExpiredError(challenge_token=appr.challenge_token)
                     else:
                         ctx.last_challenge_token = appr.challenge_token
-                        from pya_durable.approvals import ApprovalRequiredError
+                        from pydantic_ai_durable.approvals import ApprovalRequiredError
                         raise ApprovalRequiredError(
                             challenge_token=appr.challenge_token,
                             tool_name=tool_name,
@@ -429,7 +429,7 @@ def _create_tool_wrapper(
                             expires_at=appr.expires_at,
                         )
                 else:
-                    from pya_durable.approvals import ApprovalManager, ApprovalRequiredError
+                    from pydantic_ai_durable.approvals import ApprovalManager, ApprovalRequiredError
 
                     appr_mgr = ApprovalManager(ctx.storage)
                     record = await appr_mgr.create_challenge(

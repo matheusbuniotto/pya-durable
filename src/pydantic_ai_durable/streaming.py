@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 import inspect
 from typing import Any, AsyncIterator, Awaitable, Callable, Generic, TypeVar
 
-from pya_durable.models import utc_now_iso
+from pydantic_ai_durable.models import utc_now_iso
 
 TDoc = TypeVar("TDoc")
 

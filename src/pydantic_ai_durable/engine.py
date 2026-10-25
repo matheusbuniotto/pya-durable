@@ -12,18 +12,18 @@ from pydantic_ai.messages import (
     ToolCallPart,
 )
 
-from pya_durable.approvals import ApprovalRequiredError
-from pya_durable.models import (
+from pydantic_ai_durable.approvals import ApprovalRequiredError
+from pydantic_ai_durable.models import (
     TaskStatus,
     TranscriptEntryKind,
     TranscriptEntryRecord,
     utc_now_iso,
 )
-from pya_durable.replay import durable_execution_context
-from pya_durable.storage import DurableStorage
-from pya_durable.streaming import StreamEvent, stream_hub
+from pydantic_ai_durable.replay import durable_execution_context
+from pydantic_ai_durable.storage import DurableStorage
+from pydantic_ai_durable.streaming import StreamEvent, stream_hub
 
-logger = logging.getLogger("pya_durable.engine")
+logger = logging.getLogger("pydantic_ai_durable.engine")
 
 TOutput = TypeVar("TOutput")
 
@@ -57,7 +57,7 @@ class DurableStepEngine:
         conversation_id: str,
         current_parent_id: str | None,
     ) -> str | None:
-        from pya_durable.steering import global_steering_queue
+        from pydantic_ai_durable.steering import global_steering_queue
 
         steer_msgs = global_steering_queue.pop_all(conversation_id)
         for steer_msg in steer_msgs:

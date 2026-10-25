@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw
 
 import aiosqlite
 
-from pya_durable.models import (
+from pydantic_ai_durable.models import (
     ConversationRecord,
     DurableDocRecord,
     ReplayPolicy,
@@ -21,7 +21,7 @@ from pya_durable.models import (
     TranscriptEntryKind,
     TranscriptEntryRecord,
 )
-from pya_durable.storage import AioSqliteStorage
+from pydantic_ai_durable.storage import AioSqliteStorage
 
 
 def render_evidence_card(
@@ -73,7 +73,7 @@ async def run_lane_1() -> tuple[str, list[str]]:
         ]
         assert all(t in tables for t in expected)
         details = [
-            "Verified trunk baseline lacked pya_durable storage module.",
+            "Verified trunk baseline lacked pydantic_ai_durable storage module.",
             f"Created head database with schema tables. {len(tables)} tables verified.",
             "All expected tables exist in SQLite master catalog.",
             "Status. PASS verified on head commit.",

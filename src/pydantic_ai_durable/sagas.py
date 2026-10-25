@@ -6,15 +6,15 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from pya_durable.models import (
+from pydantic_ai_durable.models import (
     SagaPolicy,
     TaskOutcome,
     TaskRecord,
     TaskStatus,
 )
-from pya_durable.storage import DurableStorage
+from pydantic_ai_durable.storage import DurableStorage
 
-logger = logging.getLogger("pya_durable.sagas")
+logger = logging.getLogger("pydantic_ai_durable.sagas")
 
 
 class SagaExecutionError(RuntimeError):
@@ -336,7 +336,7 @@ class SagaCoordinator:
             )
             await self.storage.insert_task(initial_record)
             if self.stream_hub is not None and conversation_id:
-                from pya_durable.streaming import StreamEvent
+                from pydantic_ai_durable.streaming import StreamEvent
 
                 self.stream_hub.publish(
                     conversation_id,
@@ -401,7 +401,7 @@ class SagaCoordinator:
                         state_json=st_json,
                     )
                     if self.stream_hub is not None and conversation_id:
-                        from pya_durable.streaming import StreamEvent
+                        from pydantic_ai_durable.streaming import StreamEvent
 
                         self.stream_hub.publish(
                             conversation_id,
@@ -474,7 +474,7 @@ class SagaCoordinator:
                         state_json=st_json,
                     )
                     if self.stream_hub is not None and conversation_id:
-                        from pya_durable.streaming import StreamEvent
+                        from pydantic_ai_durable.streaming import StreamEvent
 
                         self.stream_hub.publish(
                             conversation_id,

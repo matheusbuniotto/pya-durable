@@ -8,7 +8,7 @@ import pytest
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
 
-from pya_durable import (
+from pydantic_ai_durable import (
     Conversation,
     DurableConversation,
     DurableHarness,

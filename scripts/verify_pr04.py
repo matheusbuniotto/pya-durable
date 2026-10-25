@@ -10,14 +10,14 @@ from PIL import Image, ImageDraw
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.test import TestModel
 
-from pya_durable.models import (
+from pydantic_ai_durable.models import (
     ConversationRecord,
     TaskRecord,
     TaskStatus,
 )
-from pya_durable.storage import AioSqliteStorage
-from pya_durable.subagents import SubagentManager, SubagentResult
-from pya_durable.task_tree import (
+from pydantic_ai_durable.storage import AioSqliteStorage
+from pydantic_ai_durable.subagents import SubagentManager, SubagentResult
+from pydantic_ai_durable.task_tree import (
     CycleDetectedError,
     TaskContext,
     TaskDefinition,

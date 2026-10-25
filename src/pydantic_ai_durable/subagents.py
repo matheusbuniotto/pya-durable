@@ -7,17 +7,17 @@ from typing import Any
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
 
-from pya_durable.engine import DurableStepEngine
-from pya_durable.harness import DurableHarness
-from pya_durable.models import (
+from pydantic_ai_durable.engine import DurableStepEngine
+from pydantic_ai_durable.harness import DurableHarness
+from pydantic_ai_durable.models import (
     ConversationRecord,
     TaskRecord,
     TaskStatus,
 )
-from pya_durable.recovery import CrashRecoveryManager
-from pya_durable.storage import DurableStorage
+from pydantic_ai_durable.recovery import CrashRecoveryManager
+from pydantic_ai_durable.storage import DurableStorage
 
-logger = logging.getLogger("pya_durable.subagents")
+logger = logging.getLogger("pydantic_ai_durable.subagents")
 
 
 @dataclass

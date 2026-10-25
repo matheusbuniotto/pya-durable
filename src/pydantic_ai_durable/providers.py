@@ -16,7 +16,7 @@ from pydantic_ai.models import KnownModelName, Model, infer_model
 from pydantic_ai.models.test import TestModel
 from pydantic_ai.providers import Provider, infer_provider, infer_provider_class
 
-from pya_durable.models import normalize_model_name
+from pydantic_ai_durable.models import normalize_model_name
 
 PROVIDER_ALIASES = {
     "openrouter": "openrouter",

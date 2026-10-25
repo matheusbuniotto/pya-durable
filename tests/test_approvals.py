@@ -8,7 +8,7 @@ import pytest
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.test import TestModel
 
-from pya_durable.approvals import (
+from pydantic_ai_durable.approvals import (
     ApprovalExpiredError,
     ApprovalManager,
     ApprovalRejectedError,
@@ -16,8 +16,8 @@ from pya_durable.approvals import (
     InvalidApprovalDecisionError,
     approval_gate,
 )
-from pya_durable.engine import DurableStepEngine
-from pya_durable.extensions import (
+from pydantic_ai_durable.engine import DurableStepEngine
+from pydantic_ai_durable.extensions import (
     ExtensionDefinition,
     HookContext,
     HookDecision,
@@ -26,10 +26,10 @@ from pya_durable.extensions import (
     global_extension_registry,
     hook,
 )
-from pya_durable.harness import DurableHarness
-from pya_durable.jsonl_storage import JsonlStorage
-from pya_durable.memory_storage import MemoryStorage
-from pya_durable.models import (
+from pydantic_ai_durable.harness import DurableHarness
+from pydantic_ai_durable.jsonl_storage import JsonlStorage
+from pydantic_ai_durable.memory_storage import MemoryStorage
+from pydantic_ai_durable.models import (
     ApprovalDecision,
     ApprovalRequestRecord,
     ApprovalStatus,
@@ -42,13 +42,13 @@ from pya_durable.models import (
     ToolInvocationStatus,
     utc_now_iso,
 )
-from pya_durable.recovery import CrashRecoveryManager
-from pya_durable.replay import (
+from pydantic_ai_durable.recovery import CrashRecoveryManager
+from pydantic_ai_durable.replay import (
     durable_execution_context,
     durable_tool,
 )
-from pya_durable.storage import AioSqliteStorage
-from pya_durable.streaming import (
+from pydantic_ai_durable.storage import AioSqliteStorage
+from pydantic_ai_durable.streaming import (
     ApprovalRequestedEvent,
     ApprovalResolvedEvent,
     stream_hub,

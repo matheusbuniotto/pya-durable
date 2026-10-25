@@ -6,13 +6,13 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
-from pya_durable.models import (
+from pydantic_ai_durable.models import (
     TaskRecord,
     TaskStatus,
 )
-from pya_durable.storage import DurableStorage
+from pydantic_ai_durable.storage import DurableStorage
 
-logger = logging.getLogger("pya_durable.task_tree")
+logger = logging.getLogger("pydantic_ai_durable.task_tree")
 
 
 class CycleDetectedError(ValueError):
@@ -516,7 +516,7 @@ class TaskRunner:
         owner_id: str = "root",
         conversation_id: str | None = None,
     ) -> Any:
-        from pya_durable.sagas import SagaCoordinator
+        from pydantic_ai_durable.sagas import SagaCoordinator
 
         coordinator = SagaCoordinator(self.storage, task_runner=self)
         return await coordinator.run_saga(

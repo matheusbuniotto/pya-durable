@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
-from pya_durable.models import (
+from pydantic_ai_durable.models import (
     ApprovalRequestRecord,
     ApprovalStatus,
     ConversationRecord,
@@ -17,7 +17,7 @@ from pya_durable.models import (
     TranscriptEntryRecord,
     utc_now_iso,
 )
-from pya_durable.storage import DurableStorage
+from pydantic_ai_durable.storage import DurableStorage
 
 
 class MemoryStorage(DurableStorage):

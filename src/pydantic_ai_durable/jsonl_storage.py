@@ -4,8 +4,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-from pya_durable.memory_storage import MemoryStorage
-from pya_durable.models import (
+from pydantic_ai_durable.memory_storage import MemoryStorage
+from pydantic_ai_durable.models import (
     ApprovalRequestRecord,
     ApprovalStatus,
     ConversationRecord,

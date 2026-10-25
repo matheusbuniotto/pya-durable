@@ -9,15 +9,15 @@ from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.test import TestModel
 
-from pya_durable.engine import DurableStepEngine
-from pya_durable.harness import DurableHarness
-from pya_durable.models import (
+from pydantic_ai_durable.engine import DurableStepEngine
+from pydantic_ai_durable.harness import DurableHarness
+from pydantic_ai_durable.models import (
     ConversationRecord,
     TaskRecord,
     TaskStatus,
     TranscriptEntryKind,
 )
-from pya_durable.storage import AioSqliteStorage
+from pydantic_ai_durable.storage import AioSqliteStorage
 
 os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
 
@@ -205,14 +205,14 @@ async def test_early_generator_close_records_partial_state(db_path: str) -> None
 
 
 def test_pydantic_ai_durable_alias() -> None:
-    import pya_durable
+    import pydantic_ai_durable
     import pydantic_ai_durable
 
-    assert pydantic_ai_durable.DurableHarness is pya_durable.DurableHarness
-    assert pydantic_ai_durable.DurableConversation is pya_durable.DurableConversation
-    assert pydantic_ai_durable.define_saga is pya_durable.define_saga
-    assert pydantic_ai_durable.AioSqliteStorage is pya_durable.AioSqliteStorage
-    assert pydantic_ai_durable.MemoryStorage is pya_durable.MemoryStorage
-    assert pydantic_ai_durable.JsonlStorage is pya_durable.JsonlStorage
-    assert pydantic_ai_durable.approval_gate is pya_durable.approval_gate
+    assert pydantic_ai_durable.DurableHarness is pydantic_ai_durable.DurableHarness
+    assert pydantic_ai_durable.DurableConversation is pydantic_ai_durable.DurableConversation
+    assert pydantic_ai_durable.define_saga is pydantic_ai_durable.define_saga
+    assert pydantic_ai_durable.AioSqliteStorage is pydantic_ai_durable.AioSqliteStorage
+    assert pydantic_ai_durable.MemoryStorage is pydantic_ai_durable.MemoryStorage
+    assert pydantic_ai_durable.JsonlStorage is pydantic_ai_durable.JsonlStorage
+    assert pydantic_ai_durable.approval_gate is pydantic_ai_durable.approval_gate
 

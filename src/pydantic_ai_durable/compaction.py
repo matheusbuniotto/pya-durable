@@ -4,16 +4,16 @@ import logging
 import uuid
 from typing import Any, Awaitable, Callable
 
-from pya_durable.models import (
+from pydantic_ai_durable.models import (
     DurableDocRecord,
     TranscriptEntryKind,
     TranscriptEntryRecord,
     utc_now_iso,
 )
-from pya_durable.replay import durable_tool
-from pya_durable.storage import DurableStorage
+from pydantic_ai_durable.replay import durable_tool
+from pydantic_ai_durable.storage import DurableStorage
 
-logger = logging.getLogger("pya_durable.compaction")
+logger = logging.getLogger("pydantic_ai_durable.compaction")
 
 
 class BackgroundCompactor:

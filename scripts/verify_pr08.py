@@ -10,18 +10,18 @@ from PIL import Image, ImageDraw
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
 
-from pya_durable.env import (
+from pydantic_ai_durable.env import (
     CommandTimeoutError,
     IsolatedSandboxEnv,
     LocalExecutionEnv,
     MockExecutionEnv,
     PathTraversalError,
 )
-from pya_durable.extensions import ExtensionRegistry
-from pya_durable.harness import DurableHarness
-from pya_durable.models import ReplayPolicy
-from pya_durable.storage import AioSqliteStorage
-from pya_durable.tools import (
+from pydantic_ai_durable.extensions import ExtensionRegistry
+from pydantic_ai_durable.harness import DurableHarness
+from pydantic_ai_durable.models import ReplayPolicy
+from pydantic_ai_durable.storage import AioSqliteStorage
+from pydantic_ai_durable.tools import (
     create_coding_extension,
     create_edit_file_tool,
     create_exec_command_tool,

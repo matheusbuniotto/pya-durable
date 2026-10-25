@@ -8,12 +8,12 @@ from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
 
-from pya_durable.docs import DocumentManager, define_doc
-from pya_durable.harness import DurableHarness
-from pya_durable.jsonl_storage import JsonlStorage
-from pya_durable.memo import MemoManager
-from pya_durable.memory_storage import MemoryStorage
-from pya_durable.models import (
+from pydantic_ai_durable.docs import DocumentManager, define_doc
+from pydantic_ai_durable.harness import DurableHarness
+from pydantic_ai_durable.jsonl_storage import JsonlStorage
+from pydantic_ai_durable.memo import MemoManager
+from pydantic_ai_durable.memory_storage import MemoryStorage
+from pydantic_ai_durable.models import (
     ConversationRecord,
     DurableDocRecord,
     TaskRecord,

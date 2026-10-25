@@ -16,19 +16,19 @@ import aiosqlite
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 
-from pya_durable.approvals import ApprovalManager, ApprovalRequestRecord
-from pya_durable.branching import DurableConversation, InvalidForkEntryError
-from pya_durable.compaction import BackgroundCompactor
-from pya_durable.docs import DocDefinition, DocumentManager
-from pya_durable.engine import DurableStepEngine, TurnResult
-from pya_durable.extensions import (
+from pydantic_ai_durable.approvals import ApprovalManager, ApprovalRequestRecord
+from pydantic_ai_durable.branching import DurableConversation, InvalidForkEntryError
+from pydantic_ai_durable.compaction import BackgroundCompactor
+from pydantic_ai_durable.docs import DocDefinition, DocumentManager
+from pydantic_ai_durable.engine import DurableStepEngine, TurnResult
+from pydantic_ai_durable.extensions import (
     ExtensionDefinition,
     ExtensionRegistry,
     SectionContext,
     global_extension_registry,
 )
-from pya_durable.memo import MemoManager
-from pya_durable.models import (
+from pydantic_ai_durable.memo import MemoManager
+from pydantic_ai_durable.models import (
     ConversationRecord,
     SubmissionRecord,
     SubmissionStatus,
@@ -37,11 +37,11 @@ from pya_durable.models import (
     TranscriptEntryKind,
     TranscriptEntryRecord,
 )
-from pya_durable.providers import ModelsRegistry, global_models_registry, resolve_agent
-from pya_durable.recovery import CrashRecoveryManager
-from pya_durable.steering import global_steering_queue
-from pya_durable.storage import DurableStorage
-from pya_durable.streaming import (
+from pydantic_ai_durable.providers import ModelsRegistry, global_models_registry, resolve_agent
+from pydantic_ai_durable.recovery import CrashRecoveryManager
+from pydantic_ai_durable.steering import global_steering_queue
+from pydantic_ai_durable.storage import DurableStorage
+from pydantic_ai_durable.streaming import (
     AgentEvent,
     ConversationViewState,
     ReactiveDocumentState,
@@ -52,7 +52,7 @@ from pya_durable.streaming import (
 )
 
 if TYPE_CHECKING:
-    from pya_durable.env import ExecutionEnv
+    from pydantic_ai_durable.env import ExecutionEnv
 
 TOutput = TypeVar("TOutput")
 TDoc = TypeVar("TDoc")
@@ -138,7 +138,7 @@ class DurableHarness(Generic[TOutput]):
             if callable(self._env_factory):
                 return self._env_factory(target_id, cwd)
             return self._env_factory
-        from pya_durable.env import LocalExecutionEnv
+        from pydantic_ai_durable.env import LocalExecutionEnv
         return LocalExecutionEnv(cwd=cwd or Path.cwd())
 
     @property
@@ -629,8 +629,8 @@ class DurableHarness(Generic[TOutput]):
         input_data: Any,
         task_id: str | None = None,
     ) -> Any:
-        from pya_durable.sagas import SagaCoordinator
-        from pya_durable.task_tree import TaskRunner
+        from pydantic_ai_durable.sagas import SagaCoordinator
+        from pydantic_ai_durable.task_tree import TaskRunner
 
         runner = TaskRunner(self.storage)
         coordinator = SagaCoordinator(self.storage, task_runner=runner, stream_hub=stream_hub)
@@ -649,7 +649,7 @@ class DurableHarness(Generic[TOutput]):
         poll_interval: float = 0.05,
         timeout: float | None = None,
     ) -> TaskRecord:
-        from pya_durable.task_tree import TaskRunner
+        from pydantic_ai_durable.task_tree import TaskRunner
 
         runner = TaskRunner(self.storage)
         return await runner.wait_for_task(task_id, poll_interval=poll_interval, timeout=timeout)

@@ -4,8 +4,8 @@ import pytest
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
 
-from pya_durable.harness import DurableHarness
-from pya_durable.models import (
+from pydantic_ai_durable.harness import DurableHarness
+from pydantic_ai_durable.models import (
     ConversationRecord,
     ReplayPolicy,
     SubmissionRecord,
@@ -15,8 +15,8 @@ from pya_durable.models import (
     ToolInvocationRecord,
     ToolInvocationStatus,
 )
-from pya_durable.recovery import CrashRecoveryManager
-from pya_durable.replay import (
+from pydantic_ai_durable.recovery import CrashRecoveryManager
+from pydantic_ai_durable.replay import (
     ConfigurationError,
     InvalidReplayPolicyError,
     TOOL_REGISTRY,
@@ -24,7 +24,7 @@ from pya_durable.replay import (
     durable_tool,
     set_tool_partial_output,
 )
-from pya_durable.storage import AioSqliteStorage
+from pydantic_ai_durable.storage import AioSqliteStorage
 
 
 def test_invalid_replay_policy_raises_configuration_error() -> None:

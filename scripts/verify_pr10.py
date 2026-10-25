@@ -13,12 +13,12 @@ from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
 
-from pya_durable.docs import define_doc
-from pya_durable.harness import DurableHarness
-from pya_durable.jsonl_storage import JsonlStorage
-from pya_durable.memo import MemoManager
-from pya_durable.memory_storage import MemoryStorage
-from pya_durable.models import (
+from pydantic_ai_durable.docs import define_doc
+from pydantic_ai_durable.harness import DurableHarness
+from pydantic_ai_durable.jsonl_storage import JsonlStorage
+from pydantic_ai_durable.memo import MemoManager
+from pydantic_ai_durable.memory_storage import MemoryStorage
+from pydantic_ai_durable.models import (
     ConversationRecord,
     TaskRecord,
     TaskStatus,
@@ -26,7 +26,7 @@ from pya_durable.models import (
     TranscriptEntryKind,
     TranscriptEntryRecord,
 )
-from pya_durable.storage import AioSqliteStorage
+from pydantic_ai_durable.storage import AioSqliteStorage
 
 os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
 

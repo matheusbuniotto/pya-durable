@@ -8,31 +8,31 @@ import time
 
 from PIL import Image, ImageDraw
 
-from pya_durable.jsonl_storage import JsonlStorage
-from pya_durable.memory_storage import MemoryStorage
-from pya_durable.models import (
+from pydantic_ai_durable.jsonl_storage import JsonlStorage
+from pydantic_ai_durable.memory_storage import MemoryStorage
+from pydantic_ai_durable.models import (
     ConversationRecord,
     SagaPolicy,
     TaskRecord,
     TaskStatus,
 )
-from pya_durable.recovery import CrashRecoveryManager
-from pya_durable.replay import (
+from pydantic_ai_durable.recovery import CrashRecoveryManager
+from pydantic_ai_durable.replay import (
     create_durable_task,
     durable_execution_context,
     durable_tool,
     wait_for_durable_task,
 )
-from pya_durable.sagas import (
+from pydantic_ai_durable.sagas import (
     SagaContext,
     SagaCoordinator,
     SagaExecutionError,
     SagaResult,
     define_saga,
 )
-from pya_durable.storage import AioSqliteStorage
-from pya_durable.streaming import stream_hub
-from pya_durable.task_tree import TaskPhaseResult, TaskRunner, define_task
+from pydantic_ai_durable.storage import AioSqliteStorage
+from pydantic_ai_durable.streaming import stream_hub
+from pydantic_ai_durable.task_tree import TaskPhaseResult, TaskRunner, define_task
 
 os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
 

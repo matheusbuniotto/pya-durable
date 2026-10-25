@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from pya_durable.storage import DurableStorage
+from pydantic_ai_durable.storage import DurableStorage
 
 
 class MemoManager:
@@ -28,7 +28,7 @@ class MemoManager:
 
         conv = await storage.get_conversation(conversation_id)
         if conv is None:
-            from pya_durable.models import ConversationRecord
+            from pydantic_ai_durable.models import ConversationRecord
             await storage.insert_conversation(
                 ConversationRecord(
                     conversation_id=conversation_id,

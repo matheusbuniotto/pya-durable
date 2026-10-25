@@ -5,7 +5,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
-logger = logging.getLogger("pya_durable.extensions")
+logger = logging.getLogger("pydantic_ai_durable.extensions")
 
 
 @dataclass

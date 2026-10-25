@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from pya_durable.env import CommandTimeoutError, ExecutionEnv
-from pya_durable.extensions import ExtensionDefinition, define_extension, define_section
-from pya_durable.replay import durable_tool, set_tool_partial_output
+from pydantic_ai_durable.env import CommandTimeoutError, ExecutionEnv
+from pydantic_ai_durable.extensions import ExtensionDefinition, define_extension, define_section
+from pydantic_ai_durable.replay import durable_tool, set_tool_partial_output
 
 
 def create_read_file_tool(env: ExecutionEnv) -> Any:

@@ -5,15 +5,15 @@ import logging
 from typing import Any, Callable, TypeVar
 import uuid
 
-from pya_durable.models import (
+from pydantic_ai_durable.models import (
     ApprovalDecision,
     ApprovalRequestRecord,
     ApprovalStatus,
     utc_now_iso,
 )
-from pya_durable.storage import DurableStorage
+from pydantic_ai_durable.storage import DurableStorage
 
-logger = logging.getLogger("pya_durable.approvals")
+logger = logging.getLogger("pydantic_ai_durable.approvals")
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -126,7 +126,7 @@ class ApprovalManager:
 
         # Notify real-time stream hub and multiplayer hub if available
         try:
-            from pya_durable.streaming import ApprovalRequestedEvent, stream_hub, multiplayer_hub
+            from pydantic_ai_durable.streaming import ApprovalRequestedEvent, stream_hub, multiplayer_hub
 
             event = ApprovalRequestedEvent(
                 challenge_token=token,
@@ -247,7 +247,7 @@ class ApprovalManager:
 
         # Notify real-time stream hub and multiplayer hub if available
         try:
-            from pya_durable.streaming import ApprovalResolvedEvent, stream_hub, multiplayer_hub
+            from pydantic_ai_durable.streaming import ApprovalResolvedEvent, stream_hub, multiplayer_hub
 
             event = ApprovalResolvedEvent(
                 challenge_token=challenge_token,

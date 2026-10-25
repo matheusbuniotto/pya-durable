@@ -11,20 +11,20 @@ from PIL import Image, ImageDraw
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.test import TestModel
 
-from pya_durable.branching import (
+from pydantic_ai_durable.branching import (
     DurableConversation,
     InvalidForkEntryError,
     get_branch_ancestors,
 )
-from pya_durable.harness import DurableHarness
-from pya_durable.models import (
+from pydantic_ai_durable.harness import DurableHarness
+from pydantic_ai_durable.models import (
     ConversationRecord,
     TranscriptEntryKind,
     TranscriptEntryRecord,
 )
-from pya_durable.steering import SteeringQueue, global_steering_queue
-from pya_durable.storage import AioSqliteStorage
-from pya_durable.worktrees import GitWorktreeManager
+from pydantic_ai_durable.steering import SteeringQueue, global_steering_queue
+from pydantic_ai_durable.storage import AioSqliteStorage
+from pydantic_ai_durable.worktrees import GitWorktreeManager
 
 os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
 logging.basicConfig(level=logging.INFO)

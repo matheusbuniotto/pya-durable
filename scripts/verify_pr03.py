@@ -9,9 +9,9 @@ from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.test import TestModel
 
-from pya_durable.engine import DurableStepEngine
-from pya_durable.harness import DurableHarness
-from pya_durable.models import (
+from pydantic_ai_durable.engine import DurableStepEngine
+from pydantic_ai_durable.harness import DurableHarness
+from pydantic_ai_durable.models import (
     ConversationRecord,
     ReplayPolicy,
     SubmissionRecord,
@@ -22,8 +22,8 @@ from pya_durable.models import (
     ToolInvocationStatus,
     TranscriptEntryKind,
 )
-from pya_durable.recovery import CrashRecoveryManager
-from pya_durable.replay import (
+from pydantic_ai_durable.recovery import CrashRecoveryManager
+from pydantic_ai_durable.replay import (
     ConfigurationError,
     InvalidReplayPolicyError,
     TOOL_REGISTRY,
@@ -31,7 +31,7 @@ from pya_durable.replay import (
     durable_tool,
     set_tool_partial_output,
 )
-from pya_durable.storage import AioSqliteStorage
+from pydantic_ai_durable.storage import AioSqliteStorage
 
 os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
 

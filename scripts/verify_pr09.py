@@ -12,11 +12,11 @@ from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
 
-from pya_durable.docs import define_doc
-from pya_durable.harness import DurableHarness
-from pya_durable.memo import MemoManager
-from pya_durable.storage import AioSqliteStorage
-from pya_durable.streaming import (
+from pydantic_ai_durable.docs import define_doc
+from pydantic_ai_durable.harness import DurableHarness
+from pydantic_ai_durable.memo import MemoManager
+from pydantic_ai_durable.storage import AioSqliteStorage
+from pydantic_ai_durable.streaming import (
     ClientPresenceEvent,
     ConversationViewState,
     DocUpdatedEvent,
@@ -248,7 +248,7 @@ async def run_lane_5() -> tuple[str, list[str]]:
         event_type="tool_completed",
         data={"tool_call_id": "call-1", "tool_name": "read_file", "result": "ok"},
     )
-    from pya_durable.streaming import translate_stream_event
+    from pydantic_ai_durable.streaming import translate_stream_event
     e1 = translate_stream_event(t_start)
     e2 = translate_stream_event(t_comp)
 

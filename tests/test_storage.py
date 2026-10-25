@@ -7,7 +7,7 @@ from pathlib import Path
 import aiosqlite
 import pytest
 
-from pya_durable.models import (
+from pydantic_ai_durable.models import (
     ConversationRecord,
     DurableDocRecord,
     ReplayPolicy,
@@ -20,7 +20,7 @@ from pya_durable.models import (
     TranscriptEntryKind,
     TranscriptEntryRecord,
 )
-from pya_durable.storage import AioSqliteStorage
+from pydantic_ai_durable.storage import AioSqliteStorage
 
 
 @pytest.fixture

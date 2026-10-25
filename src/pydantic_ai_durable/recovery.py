@@ -9,8 +9,8 @@ from typing import Any, Callable
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 
-from pya_durable.engine import DurableStepEngine, TurnResult
-from pya_durable.models import (
+from pydantic_ai_durable.engine import DurableStepEngine, TurnResult
+from pydantic_ai_durable.models import (
     ApprovalDecision,
     ApprovalStatus,
     ReplayPolicy,
@@ -21,10 +21,10 @@ from pya_durable.models import (
     TranscriptEntryKind,
     utc_now_iso,
 )
-from pya_durable.replay import TOOL_REGISTRY, durable_execution_context
-from pya_durable.storage import DurableStorage
+from pydantic_ai_durable.replay import TOOL_REGISTRY, durable_execution_context
+from pydantic_ai_durable.storage import DurableStorage
 
-logger = logging.getLogger("pya_durable.recovery")
+logger = logging.getLogger("pydantic_ai_durable.recovery")
 
 
 @dataclass

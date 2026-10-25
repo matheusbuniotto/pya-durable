@@ -8,7 +8,7 @@ from typing import Any, AsyncIterator
 
 import aiosqlite
 
-from pya_durable.models import (
+from pydantic_ai_durable.models import (
     ApprovalRequestRecord,
     ApprovalStatus,
     ConversationRecord,
@@ -25,7 +25,7 @@ from pya_durable.models import (
     utc_now_iso,
 )
 
-logger = logging.getLogger("pya_durable.storage")
+logger = logging.getLogger("pydantic_ai_durable.storage")
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS conversations (
@@ -1445,8 +1445,8 @@ class AioSqliteStorage(DurableStorage):
         return await self.get_approval_request(challenge_token, conn=target)
 
 
-from pya_durable.memory_storage import MemoryStorage
-from pya_durable.jsonl_storage import JsonlStorage
+from pydantic_ai_durable.memory_storage import MemoryStorage
+from pydantic_ai_durable.jsonl_storage import JsonlStorage
 
 SqliteStorage = AioSqliteStorage
 

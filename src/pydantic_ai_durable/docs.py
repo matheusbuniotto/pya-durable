@@ -5,10 +5,10 @@ from typing import Any, Callable, Generic, TypeVar
 
 import aiosqlite
 
-from pya_durable.models import ConversationRecord, DurableDocRecord, utc_now_iso
-from pya_durable.storage import DurableStorage
+from pydantic_ai_durable.models import ConversationRecord, DurableDocRecord, utc_now_iso
+from pydantic_ai_durable.storage import DurableStorage
 
-logger = logging.getLogger("pya_durable.docs")
+logger = logging.getLogger("pydantic_ai_durable.docs")
 
 T = TypeVar("T")
 
@@ -126,7 +126,7 @@ class DocumentManager:
         )
         await storage.upsert_durable_doc(record, conn=conn)
 
-        from pya_durable.streaming import StreamEvent, stream_hub
+        from pydantic_ai_durable.streaming import StreamEvent, stream_hub
         stream_hub.publish(
             conversation_id,
             StreamEvent(
