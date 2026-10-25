@@ -1,5 +1,10 @@
 # ⚡ pydantic-ai-durable
 
+[![CI](https://github.com/matheusbuniotto/pydantic-ai-durable/actions/workflows/ci.yml/badge.svg)](https://github.com/matheusbuniotto/pydantic-ai-durable/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/pydantic-ai-durable)](https://pypi.org/project/pydantic-ai-durable/)
+[![Python](https://img.shields.io/pypi/pyversions/pydantic-ai-durable)](https://pypi.org/project/pydantic-ai-durable/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 > **Crash-proof, stateful, and malleable agents for [PydanticAI](https://github.com/pydantic/pydantic-ai).**  
 > Complete Python implementation of Earendil's [@earendil-works/pi-durable](https://github.com/earendil-works) architecture.
 
@@ -14,6 +19,29 @@
 | **Exploring "what-if" speculations?** Re-run entire history. | **Fork instantly** in `O(1)` without copying database rows. |
 | **Distributed multi-step task fails?** Dirty resources leaked. | **Durable Sagas:** Automatic reverse rollback compensation. |
 | **AI wants to run a risky action?** Hard to intercept cleanly. | **Approval Gates:** Pauses run for human review & argument override. |
+
+---
+
+### 💥 See it survive a crash (offline, 10 seconds)
+
+```bash
+git clone https://github.com/matheusbuniotto/pydantic-ai-durable && cd pydantic-ai-durable
+uv run python examples/crash_recovery.py
+```
+
+```text
+Run 1: starting (will crash during deploy)
+  [tool] running step: provision
+  [tool] running step: migrate
+  [tool] running step: deploy
+  [tool] 💥 process killed mid-deploy (simulated kill -9)
+
+Run 2: restarting the same process
+  ♻️  recovered task: unsafe tools sealed (NOT re-run): 1, safe tools replayed: 0
+```
+
+The mutating `deploy` step is never silently repeated; safe read-only tools are replayed.
+More in [`examples/`](examples/): [crash recovery](examples/crash_recovery.py), [forking a conversation](examples/fork_conversation.py).
 
 ---
 
@@ -309,4 +337,4 @@ uv run python evals/run_evals.py --model "gpt-luna 6"
 
 ## License
 
-MIT License. Designed with human-first clarity, pragmatism, and high focus.
+[MIT](LICENSE). See [CONTRIBUTING](CONTRIBUTING.md), [SECURITY](SECURITY.md) and the [CHANGELOG](CHANGELOG.md).

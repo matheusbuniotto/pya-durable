@@ -1,0 +1,11 @@
+name: Bug report
+description: Something broke or behaves unexpectedly
+labels: [bug]
+body:
+  - type: textarea
+    attributes: {label: What happened?, description: Include a minimal reproduction if possible}
+    validations: {required: true}
+  - type: input
+    attributes: {label: Versions, placeholder: "pydantic-ai-durable x.y.z, pydantic-ai x.y.z, Python 3.x"}
+  - type: textarea
+    attributes: {label: Logs / traceback, render: shell}

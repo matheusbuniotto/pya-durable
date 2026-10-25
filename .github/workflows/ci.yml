@@ -51,3 +51,11 @@ jobs:
       - run: uv build
       - run: uvx twine check dist/*
       - run: uv venv /tmp/v && uv pip install -p /tmp/v dist/*.whl && /tmp/v/bin/python -c "import pydantic_ai_durable, pya_durable"
+  examples:
+    name: Examples smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv run python examples/crash_recovery.py
+      - run: uv run python examples/fork_conversation.py
