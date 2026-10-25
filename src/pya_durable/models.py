@@ -128,3 +128,13 @@ class DurableDocRecord(BaseModel):
     doc_type: str
     data_json: str
     updated_at: str = Field(default_factory=utc_now_iso)
+
+
+class MemoRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    conversation_id: str
+    key: str
+    value_json: str
+    created_at: str = Field(default_factory=utc_now_iso)
+

@@ -10,6 +10,7 @@ import aiosqlite
 from pya_durable.models import (
     ConversationRecord,
     DurableDocRecord,
+    MemoRecord,
     SubmissionRecord,
     SubmissionStatus,
     TaskRecord,
@@ -111,6 +112,17 @@ CREATE TABLE IF NOT EXISTS durable_docs (
     PRIMARY KEY(doc_id, conversation_id),
     FOREIGN KEY(conversation_id) REFERENCES conversations(conversation_id)
 );
+
+CREATE TABLE IF NOT EXISTS memos (
+    conversation_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    value_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY(conversation_id, key),
+    FOREIGN KEY(conversation_id) REFERENCES conversations(conversation_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_memos_conv ON memos(conversation_id);
 """
 
 
@@ -821,6 +833,35 @@ class AioSqliteStorage:
                 updated_at=row[5],
             )
 
+    async def list_durable_docs(
+        self,
+        conversation_id: str,
+        conn: aiosqlite.Connection | None = None,
+    ) -> list[DurableDocRecord]:
+        target = conn or await self.get_connection()
+        async with target.execute(
+            """
+            SELECT doc_id, conversation_id, version, doc_type, data_json, updated_at
+            FROM durable_docs
+            WHERE conversation_id = ?
+            ORDER BY doc_type, doc_id
+            """,
+            (conversation_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [
+                DurableDocRecord(
+                    doc_id=row[0],
+                    conversation_id=row[1],
+                    version=row[2],
+                    doc_type=row[3],
+                    data_json=row[4],
+                    updated_at=row[5],
+                )
+                for row in rows
+            ]
+
+
     async def checkpoint(self) -> tuple[int, int, int]:
         conn = await self.get_connection()
         async with conn.execute("PRAGMA wal_checkpoint(TRUNCATE)") as cursor:
@@ -838,3 +879,59 @@ class AioSqliteStorage:
         async with conn.execute("PRAGMA integrity_check") as cursor:
             row = await cursor.fetchone()
             return bool(row and row[0] == "ok")
+
+    async def insert_memo(
+        self,
+        conversation_id: str,
+        key: str,
+        value_json: str,
+        conn: aiosqlite.Connection | None = None,
+    ) -> bool:
+        target = conn or await self.get_connection()
+        async with target.execute(
+            """
+            INSERT OR IGNORE INTO memos (conversation_id, key, value_json, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (conversation_id, key, value_json, utc_now_iso()),
+        ) as cursor:
+            return cursor.rowcount > 0
+
+    async def get_memo(
+        self,
+        conversation_id: str,
+        key: str,
+        conn: aiosqlite.Connection | None = None,
+    ) -> MemoRecord | None:
+        target = conn or await self.get_connection()
+        async with target.execute(
+            """
+            SELECT conversation_id, key, value_json, created_at
+            FROM memos
+            WHERE conversation_id = ? AND key = ?
+            """,
+            (conversation_id, key),
+        ) as cursor:
+            row = await cursor.fetchone()
+            if row is None:
+                return None
+            return MemoRecord(
+                conversation_id=row[0],
+                key=row[1],
+                value_json=row[2],
+                created_at=row[3],
+            )
+
+    async def delete_memo(
+        self,
+        conversation_id: str,
+        key: str,
+        conn: aiosqlite.Connection | None = None,
+    ) -> bool:
+        target = conn or await self.get_connection()
+        async with target.execute(
+            "DELETE FROM memos WHERE conversation_id = ? AND key = ?",
+            (conversation_id, key),
+        ) as cursor:
+            return cursor.rowcount > 0
+

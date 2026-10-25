@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -22,9 +23,19 @@ from pya_durable.models import (
     TranscriptEntryKind,
     TranscriptEntryRecord,
 )
+from pya_durable.memo import MemoManager
 from pya_durable.steering import global_steering_queue
 from pya_durable.storage import AioSqliteStorage
-from pya_durable.streaming import StreamEvent, stream_hub
+from pya_durable.streaming import (
+    AgentEvent,
+    ConversationViewState,
+    MultiplayerPresenceHub,
+    ReactiveDocumentState,
+    ReactiveViewState,
+    StreamEvent,
+    multiplayer_hub,
+    stream_hub,
+)
 
 if TYPE_CHECKING:
     from pya_durable.env import ExecutionEnv
@@ -88,6 +99,7 @@ class DurableConversation:
 
     async def _ensure_conversation(self) -> None:
         if not self._initialized:
+            await self.storage.init_db()
             existing = await self.storage.get_conversation(self.conversation_id)
             if existing is None:
                 record = ConversationRecord(
@@ -111,6 +123,7 @@ class DurableConversation:
         doc_id: str = "default",
         conn: aiosqlite.Connection | None = None,
     ) -> TDoc:
+        await self._ensure_conversation()
         return await DocumentManager.get_doc(
             self.storage,
             doc_def,
@@ -126,6 +139,7 @@ class DurableConversation:
         doc_id: str = "default",
         conn: aiosqlite.Connection | None = None,
     ) -> None:
+        await self._ensure_conversation()
         await DocumentManager.set_doc(
             self.storage,
             doc_def,
@@ -134,6 +148,122 @@ class DurableConversation:
             doc_id=doc_id,
             conn=conn,
         )
+        await self.refresh_view_states()
+
+    async def document_state(
+        self,
+        doc_def: DocDefinition[TDoc],
+        doc_id: str = "default",
+    ) -> ReactiveDocumentState[TDoc]:
+        current_val = await self.get_doc(doc_def, doc_id=doc_id)
+        r_doc: ReactiveDocumentState[TDoc] = ReactiveDocumentState(current_val)
+        stream_hub.register_reactive_doc(self.conversation_id, doc_def.doc_type, doc_id, r_doc)
+        return r_doc
+
+    async def memo(self, key: str, value: Any = None) -> Any:
+        return await MemoManager.memo(self.storage, self.conversation_id, key, value)
+
+    def connect_client(self, client_id: str) -> None:
+        multiplayer_hub.connect(self.conversation_id, client_id)
+        try:
+            asyncio.create_task(self.refresh_view_states())
+        except RuntimeError:
+            pass
+
+    def disconnect_client(self, client_id: str) -> None:
+        multiplayer_hub.disconnect(self.conversation_id, client_id)
+        try:
+            asyncio.create_task(self.refresh_view_states())
+        except RuntimeError:
+            pass
+
+    def get_connected_clients(self) -> list[str]:
+        return multiplayer_hub.get_connected_clients(self.conversation_id)
+
+    async def watch_events(self) -> AsyncIterator[AgentEvent]:
+        async for evt in stream_hub.subscribe_events(self.conversation_id):
+            yield evt
+
+    async def view_state(self) -> ReactiveViewState:
+        await self._ensure_conversation()
+        transcript_entries = await self.get_transcript()
+        formatted_entries = []
+        for e in transcript_entries:
+            try:
+                msg = json.loads(e.message_json)
+            except Exception:
+                msg = e.message_json
+            formatted_entries.append({
+                "entry_id": e.entry_id,
+                "kind": e.kind.value,
+                "created_at": e.created_at,
+                "message": msg,
+            })
+
+        doc_records = await self.storage.list_durable_docs(self.conversation_id)
+        docs_dict: dict[str, Any] = {}
+        for d in doc_records:
+            try:
+                docs_dict[f"{d.doc_type}:{d.doc_id}"] = json.loads(d.data_json)
+            except Exception:
+                docs_dict[f"{d.doc_type}:{d.doc_id}"] = d.data_json
+
+        status = "busy" if self._busy else "idle"
+        clients = multiplayer_hub.get_connected_clients(self.conversation_id)
+
+        snapshot = ConversationViewState(
+            conversation_id=self.conversation_id,
+            status=status,
+            current_leaf_entry_id=self.current_leaf_entry_id,
+            entries=formatted_entries,
+            docs=docs_dict,
+            connected_clients=clients,
+            version=1,
+        )
+        rv = ReactiveViewState(snapshot)
+        stream_hub.register_reactive_view(self.conversation_id, rv)
+        return rv
+
+    async def refresh_view_states(self) -> None:
+        views = stream_hub._reactive_views.get(self.conversation_id, set())
+        if not views:
+            return
+        transcript_entries = await self.get_transcript()
+        formatted_entries = []
+        for e in transcript_entries:
+            try:
+                msg = json.loads(e.message_json)
+            except Exception:
+                msg = e.message_json
+            formatted_entries.append({
+                "entry_id": e.entry_id,
+                "kind": e.kind.value,
+                "created_at": e.created_at,
+                "message": msg,
+            })
+
+        doc_records = await self.storage.list_durable_docs(self.conversation_id)
+        docs_dict: dict[str, Any] = {}
+        for d in doc_records:
+            try:
+                docs_dict[f"{d.doc_type}:{d.doc_id}"] = json.loads(d.data_json)
+            except Exception:
+                docs_dict[f"{d.doc_type}:{d.doc_id}"] = d.data_json
+
+        status = "busy" if self._busy else "idle"
+        clients = multiplayer_hub.get_connected_clients(self.conversation_id)
+
+        for rv in list(views):
+            new_state = ConversationViewState(
+                conversation_id=self.conversation_id,
+                status=status,
+                current_leaf_entry_id=self.current_leaf_entry_id,
+                entries=formatted_entries,
+                docs=docs_dict,
+                connected_clients=clients,
+                version=rv.value.version + 1,
+            )
+            rv.notify(new_state)
 
     async def fork(
         self,
@@ -242,6 +372,16 @@ class DurableConversation:
 
         self._busy = True
         try:
+            stream_hub.publish(
+                self.conversation_id,
+                StreamEvent(
+                    conversation_id=self.conversation_id,
+                    event_type="turn_started",
+                    data={"prompt": prompt, "request_id": request_id},
+                ),
+            )
+            await self.refresh_view_states()
+
             if request_id:
                 existing = await self.storage.get_submission(request_id)
                 if existing is not None and existing.status == SubmissionStatus.SETTLED:
@@ -297,6 +437,19 @@ class DurableConversation:
 
             self.current_leaf_entry_id = turn_result.leaf_entry_id
 
+            stream_hub.publish(
+                self.conversation_id,
+                StreamEvent(
+                    conversation_id=self.conversation_id,
+                    event_type="turn_completed",
+                    data={
+                        "output": turn_result.output,
+                        "token_usage": turn_result.token_usage,
+                    },
+                ),
+            )
+            await self.refresh_view_states()
+
             if self.auto_compact and BackgroundCompactor.should_compact(
                 turn_result.token_usage.get("total_tokens", 0),
                 threshold=self.compaction_threshold,
@@ -326,3 +479,4 @@ class DurableConversation:
             return turn_result
         finally:
             self._busy = False
+            await self.refresh_view_states()
