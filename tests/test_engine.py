@@ -189,7 +189,7 @@ async def test_early_generator_close_records_partial_state(db_path: str) -> None
         engine = DurableStepEngine(storage)
         agent = Agent(TestModel(custom_output_text="early break"))
 
-        res = await engine.run_turn(
+        _res = await engine.run_turn(
             agent=agent,
             user_prompt="stop early",
             conversation_id="conv-early",
@@ -202,3 +202,17 @@ async def test_early_generator_close_records_partial_state(db_path: str) -> None
         updated_task = await storage.get_task("task-early")
         assert updated_task is not None
         assert updated_task.phase == "interrupted"
+
+
+def test_pydantic_ai_durable_alias() -> None:
+    import pya_durable
+    import pydantic_ai_durable
+
+    assert pydantic_ai_durable.DurableHarness is pya_durable.DurableHarness
+    assert pydantic_ai_durable.DurableConversation is pya_durable.DurableConversation
+    assert pydantic_ai_durable.define_saga is pya_durable.define_saga
+    assert pydantic_ai_durable.AioSqliteStorage is pya_durable.AioSqliteStorage
+    assert pydantic_ai_durable.MemoryStorage is pya_durable.MemoryStorage
+    assert pydantic_ai_durable.JsonlStorage is pya_durable.JsonlStorage
+    assert pydantic_ai_durable.approval_gate is pya_durable.approval_gate
+
