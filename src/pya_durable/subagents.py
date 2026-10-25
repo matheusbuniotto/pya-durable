@@ -15,7 +15,7 @@ from pya_durable.models import (
     TaskStatus,
 )
 from pya_durable.recovery import CrashRecoveryManager
-from pya_durable.storage import AioSqliteStorage
+from pya_durable.storage import DurableStorage
 
 logger = logging.getLogger("pya_durable.subagents")
 
@@ -32,7 +32,7 @@ class SubagentResult:
 class SubagentManager:
     @staticmethod
     async def create_subagent(
-        storage: AioSqliteStorage,
+        storage: DurableStorage,
         parent_task_id: str,
         agent_config: dict[str, Any] | None = None,
     ) -> ConversationRecord:
@@ -58,7 +58,7 @@ class SubagentManager:
 
     @staticmethod
     async def run_subagent(
-        storage: AioSqliteStorage,
+        storage: DurableStorage,
         parent_task_id: str,
         agent: Agent[Any, Any],
         prompt: str,
@@ -124,24 +124,42 @@ class SubagentManager:
 
     @staticmethod
     async def resume_subagent(
-        storage: AioSqliteStorage,
+        storage: DurableStorage,
         conversation_id: str,
         agent: Agent[Any, Any],
     ) -> Any:
-        conn = await storage.get_connection()
-        async with conn.execute(
-            """
-            SELECT task_id, input_json, checkpoint_json FROM tasks
-            WHERE (owner_id = ? OR state_json LIKE ?)
-              AND status IN ('running', 'pending', 'waiting')
-            ORDER BY created_at DESC LIMIT 1
-            """,
-            (conversation_id, f'%"{conversation_id}"%'),
-        ) as cur:
-            row = await cur.fetchone()
+        target_task_id = None
+        input_json = None
+        checkpoint_json = None
 
-        if row:
-            target_task_id, input_json, checkpoint_json = row[0], row[1], row[2]
+        if hasattr(storage, "get_connection"):
+            conn = await storage.get_connection()
+            async with conn.execute(
+                """
+                SELECT task_id, input_json, checkpoint_json FROM tasks
+                WHERE (owner_id = ? OR state_json LIKE ?)
+                  AND status IN ('running', 'pending', 'waiting')
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (conversation_id, f'%"{conversation_id}"%'),
+            ) as cur:
+                row = await cur.fetchone()
+                if row:
+                    target_task_id, input_json, checkpoint_json = row[0], row[1], row[2]
+        else:
+            candidates: list[TaskRecord] = []
+            for st in (TaskStatus.RUNNING, TaskStatus.PENDING, TaskStatus.WAITING):
+                candidates.extend(await storage.get_tasks_by_status(st))
+            matching = [
+                t for t in candidates
+                if t.owner_id == conversation_id or (conversation_id in t.state_json)
+            ]
+            if matching:
+                matching.sort(key=lambda t: t.created_at, reverse=True)
+                target = matching[0]
+                target_task_id, input_json, checkpoint_json = target.task_id, target.input_json, target.checkpoint_json
+
+        if target_task_id:
             prompt = ""
             try:
                 inp = json.loads(input_json) if input_json else {}

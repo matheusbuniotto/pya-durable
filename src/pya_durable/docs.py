@@ -6,7 +6,7 @@ from typing import Any, Callable, Generic, TypeVar
 import aiosqlite
 
 from pya_durable.models import ConversationRecord, DurableDocRecord, utc_now_iso
-from pya_durable.storage import AioSqliteStorage
+from pya_durable.storage import DurableStorage
 
 logger = logging.getLogger("pya_durable.docs")
 
@@ -44,11 +44,11 @@ def define_doc(
 class DocumentManager:
     @staticmethod
     async def get_doc(
-        storage: AioSqliteStorage,
+        storage: DurableStorage,
         doc_def: DocDefinition[T],
         conversation_id: str,
         doc_id: str = "default",
-        conn: aiosqlite.Connection | None = None,
+        conn: Any = None,
     ) -> T:
         if not storage._initialized:
             await storage.init_db()
@@ -86,12 +86,12 @@ class DocumentManager:
 
     @staticmethod
     async def set_doc(
-        storage: AioSqliteStorage,
+        storage: DurableStorage,
         doc_def: DocDefinition[T],
         conversation_id: str,
         value: T,
         doc_id: str = "default",
-        conn: aiosqlite.Connection | None = None,
+        conn: Any = None,
     ) -> None:
         if not storage._initialized:
             await storage.init_db()

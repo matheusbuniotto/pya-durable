@@ -19,7 +19,7 @@ from pya_durable.models import (
     utc_now_iso,
 )
 from pya_durable.replay import TOOL_REGISTRY, durable_execution_context
-from pya_durable.storage import AioSqliteStorage
+from pya_durable.storage import DurableStorage
 
 logger = logging.getLogger("pya_durable.recovery")
 
@@ -38,7 +38,7 @@ class TaskRecoveryResult:
 class CrashRecoveryManager:
     def __init__(
         self,
-        storage: AioSqliteStorage,
+        storage: DurableStorage,
         agent: Agent[Any, Any] | None = None,
         tool_registry: dict[str, Callable[..., Any]] | None = None,
     ) -> None:

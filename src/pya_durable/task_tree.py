@@ -10,7 +10,7 @@ from pya_durable.models import (
     TaskRecord,
     TaskStatus,
 )
-from pya_durable.storage import AioSqliteStorage
+from pya_durable.storage import DurableStorage
 
 logger = logging.getLogger("pya_durable.task_tree")
 
@@ -20,7 +20,7 @@ class CycleDetectedError(ValueError):
 
 
 async def check_cycle(
-    storage: AioSqliteStorage,
+    storage: DurableStorage,
     task_id: str,
     parent_task_id: str | None,
 ) -> None:
@@ -64,7 +64,7 @@ class TaskContext:
     def __init__(
         self,
         task_id: str,
-        storage: AioSqliteStorage,
+        storage: DurableStorage,
         input_data: Any,
         state: dict[str, Any] | None = None,
         phase: str = "start",
@@ -235,7 +235,7 @@ def _build_task_def(
 
 
 class TaskRunner:
-    def __init__(self, storage: AioSqliteStorage) -> None:
+    def __init__(self, storage: DurableStorage) -> None:
         self.storage = storage
         self.registry: dict[str, TaskDefinition] = {}
         self.active_tasks: dict[str, asyncio.Task[Any]] = {}
@@ -244,36 +244,43 @@ class TaskRunner:
         self.registry[task_def.name] = task_def
 
     async def get_child_tasks(self, parent_task_id: str) -> list[TaskRecord]:
-        conn = await self.storage.get_connection()
-        async with conn.execute(
-            """
-            SELECT task_id, task_type, version, status, owner_kind, owner_id,
-                   phase, input_json, state_json, checkpoint_json, policy, created_at, updated_at
-            FROM tasks
-            WHERE owner_kind = 'task' AND owner_id = ?
-            ORDER BY created_at ASC
-            """,
-            (parent_task_id,),
-        ) as cursor:
-            rows = await cursor.fetchall()
-            return [
-                TaskRecord(
-                    task_id=row[0],
-                    task_type=row[1],
-                    version=row[2],
-                    status=TaskStatus(row[3]),
-                    owner_kind=row[4],
-                    owner_id=row[5],
-                    phase=row[6],
-                    input_json=row[7],
-                    state_json=row[8],
-                    checkpoint_json=row[9],
-                    policy=row[10],
-                    created_at=row[11],
-                    updated_at=row[12],
-                )
-                for row in rows
-            ]
+        if hasattr(self.storage, "get_connection"):
+            conn = await self.storage.get_connection()
+            async with conn.execute(
+                """
+                SELECT task_id, task_type, version, status, owner_kind, owner_id,
+                       phase, input_json, state_json, checkpoint_json, policy, created_at, updated_at
+                FROM tasks
+                WHERE owner_kind = 'task' AND owner_id = ?
+                ORDER BY created_at ASC
+                """,
+                (parent_task_id,),
+            ) as cursor:
+                rows = await cursor.fetchall()
+                return [
+                    TaskRecord(
+                        task_id=row[0],
+                        task_type=row[1],
+                        version=row[2],
+                        status=TaskStatus(row[3]),
+                        owner_kind=row[4],
+                        owner_id=row[5],
+                        phase=row[6],
+                        input_json=row[7],
+                        state_json=row[8],
+                        checkpoint_json=row[9],
+                        policy=row[10],
+                        created_at=row[11],
+                        updated_at=row[12],
+                    )
+                    for row in rows
+                ]
+        all_tasks: list[TaskRecord] = []
+        for st in TaskStatus:
+            all_tasks.extend(await self.storage.get_tasks_by_status(st))
+        matching = [t for t in all_tasks if t.owner_kind == "task" and t.owner_id == parent_task_id]
+        matching.sort(key=lambda t: t.created_at)
+        return matching
 
     async def abort_children_of(self, parent_task_id: str) -> None:
         children = await self.get_child_tasks(parent_task_id)
@@ -282,7 +289,7 @@ class TaskRunner:
                 await self.abort_task(child.task_id, reason="parent cancellation")
 
     @classmethod
-    async def abort_children_for(cls, storage: AioSqliteStorage, parent_task_id: str) -> None:
+    async def abort_children_for(cls, storage: DurableStorage, parent_task_id: str) -> None:
         runner = cls(storage)
         await runner.abort_children_of(parent_task_id)
 

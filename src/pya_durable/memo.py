@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from pya_durable.storage import AioSqliteStorage
+from pya_durable.storage import DurableStorage
 
 
 class MemoManager:
     @staticmethod
     async def memo(
-        storage: AioSqliteStorage,
+        storage: DurableStorage,
         conversation_id: str,
         key: str,
         value: Any = None,

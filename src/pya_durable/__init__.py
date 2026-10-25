@@ -72,8 +72,12 @@ from pya_durable.replay import (
     durable_tool,
     set_tool_partial_output,
 )
-from pya_durable.steering import SteeringQueue, global_steering_queue
-from pya_durable.storage import AioSqliteStorage
+from pya_durable.storage import (
+    AioSqliteStorage,
+    DurableStorage,
+    JsonlStorage,
+    MemoryStorage,
+)
 from pya_durable.streaming import (
     AgentEvent,
     ClientPresenceEvent,
@@ -137,6 +141,7 @@ __all__ = [
     "DurableDocRecord",
     "DurableHarness",
     "DurableStepEngine",
+    "DurableStorage",
     "EntryId",
     "ErrorEvent",
     "ExecResult",
@@ -153,10 +158,12 @@ __all__ = [
     "InvalidReplayPolicyError",
     "InvocationId",
     "IsolatedSandboxEnv",
+    "JsonlStorage",
     "LifecycleHook",
     "LocalExecutionEnv",
     "MemoManager",
     "MemoRecord",
+    "MemoryStorage",
     "MockExecutionEnv",
     "ModelCallInfo",
     "ModelDeltaEvent",

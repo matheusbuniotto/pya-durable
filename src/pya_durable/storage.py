@@ -1,9 +1,10 @@
+from abc import ABC, abstractmethod
 import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 import aiosqlite
 
@@ -126,7 +127,293 @@ CREATE INDEX IF NOT EXISTS idx_memos_conv ON memos(conversation_id);
 """
 
 
-class AioSqliteStorage:
+class DurableStorage(ABC):
+    _initialized: bool = False
+
+    @property
+    def is_initialized(self) -> bool:
+        return self._initialized
+
+    @abstractmethod
+    async def init_db(self) -> None:
+        pass
+
+    @abstractmethod
+    async def close(self) -> None:
+        pass
+
+    async def __aenter__(self) -> "DurableStorage":
+        await self.init_db()
+        return self
+
+    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        await self.close()
+
+    @abstractmethod
+    def transaction(self) -> AsyncIterator[Any]:
+        pass
+
+    @abstractmethod
+    async def insert_conversation(
+        self,
+        record: ConversationRecord,
+        conn: Any = None,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def get_conversation(
+        self,
+        conversation_id: str,
+        conn: Any = None,
+    ) -> ConversationRecord | None:
+        pass
+
+    @abstractmethod
+    async def insert_transcript_entry(
+        self,
+        record: TranscriptEntryRecord,
+        conn: Any = None,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def get_transcript_entry(
+        self,
+        entry_id: str,
+        conn: Any = None,
+    ) -> TranscriptEntryRecord | None:
+        pass
+
+    @abstractmethod
+    async def get_conversation_transcript(
+        self,
+        conversation_id: str,
+        conn: Any = None,
+    ) -> list[TranscriptEntryRecord]:
+        pass
+
+    @abstractmethod
+    async def get_ancestor_entries(
+        self,
+        leaf_entry_id: str,
+        conn: Any = None,
+    ) -> list[TranscriptEntryRecord]:
+        pass
+
+    @abstractmethod
+    async def insert_task(
+        self,
+        record: TaskRecord,
+        conn: Any = None,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def update_task_state(
+        self,
+        task_id: str,
+        phase: str,
+        state_json: str,
+        status: TaskStatus = TaskStatus.RUNNING,
+        checkpoint_json: str | None = None,
+        conn: Any = None,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def get_task(
+        self,
+        task_id: str,
+        conn: Any = None,
+    ) -> TaskRecord | None:
+        pass
+
+    @abstractmethod
+    async def get_tasks_by_status(
+        self,
+        status: TaskStatus,
+        conn: Any = None,
+    ) -> list[TaskRecord]:
+        pass
+
+    @abstractmethod
+    async def get_running_tasks(
+        self,
+        conn: Any = None,
+    ) -> list[TaskRecord]:
+        pass
+
+    @abstractmethod
+    async def record_tool_started(
+        self,
+        invocation_id: str,
+        task_id: str,
+        conversation_id: str,
+        tool_name: str,
+        args_json: str,
+        replay_policy: str,
+        conn: Any = None,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def record_tool_completed(
+        self,
+        invocation_id: str,
+        result_json: str,
+        conn: Any = None,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def record_tool_failed(
+        self,
+        invocation_id: str,
+        error_message: str,
+        conn: Any = None,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def record_tool_interrupted(
+        self,
+        invocation_id: str,
+        partial_output: str | None = None,
+        conn: Any = None,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def get_tool_invocation(
+        self,
+        invocation_id: str,
+        conn: Any = None,
+    ) -> ToolInvocationRecord | None:
+        pass
+
+    @abstractmethod
+    async def update_tool_partial_output(
+        self,
+        invocation_id: str,
+        partial_output: str,
+        conn: Any = None,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def get_tool_invocations_by_task(
+        self,
+        task_id: str,
+        conn: Any = None,
+    ) -> list[ToolInvocationRecord]:
+        pass
+
+    @abstractmethod
+    async def get_tool_invocations_by_status(
+        self,
+        status: ToolInvocationStatus,
+        conn: Any = None,
+    ) -> list[ToolInvocationRecord]:
+        pass
+
+    @abstractmethod
+    async def reconcile_started_tool_invocations(
+        self,
+        conn: Any = None,
+    ) -> tuple[int, int]:
+        pass
+
+    @abstractmethod
+    async def insert_submission(
+        self,
+        submission: SubmissionRecord,
+        conn: Any = None,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def get_submission(
+        self,
+        request_id: str,
+        conn: Any = None,
+    ) -> SubmissionRecord | None:
+        pass
+
+    @abstractmethod
+    async def update_submission(
+        self,
+        request_id: str,
+        status: SubmissionStatus,
+        result_json: str | None = None,
+        conn: Any = None,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def upsert_durable_doc(
+        self,
+        record: DurableDocRecord,
+        conn: Any = None,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def get_durable_doc(
+        self,
+        doc_id: str,
+        conversation_id: str,
+        conn: Any = None,
+    ) -> DurableDocRecord | None:
+        pass
+
+    @abstractmethod
+    async def list_durable_docs(
+        self,
+        conversation_id: str,
+        conn: Any = None,
+    ) -> list[DurableDocRecord]:
+        pass
+
+    @abstractmethod
+    async def insert_memo(
+        self,
+        conversation_id: str,
+        key: str,
+        value_json: str,
+        conn: Any = None,
+    ) -> bool:
+        pass
+
+    @abstractmethod
+    async def get_memo(
+        self,
+        conversation_id: str,
+        key: str,
+        conn: Any = None,
+    ) -> MemoRecord | None:
+        pass
+
+    @abstractmethod
+    async def delete_memo(
+        self,
+        conversation_id: str,
+        key: str,
+        conn: Any = None,
+    ) -> bool:
+        pass
+
+    async def checkpoint(self) -> tuple[int, int, int]:
+        return (0, 0, 0)
+
+    async def vacuum(self) -> None:
+        pass
+
+    async def check_integrity(self) -> bool:
+        return True
+
+
+class AioSqliteStorage(DurableStorage):
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = str(db_path)
         self._conn: aiosqlite.Connection | None = None
@@ -934,4 +1221,17 @@ class AioSqliteStorage:
             (conversation_id, key),
         ) as cursor:
             return cursor.rowcount > 0
+
+
+from pya_durable.memory_storage import MemoryStorage
+from pya_durable.jsonl_storage import JsonlStorage
+
+__all__ = [
+    "DurableStorage",
+    "AioSqliteStorage",
+    "MemoryStorage",
+    "JsonlStorage",
+    "SCHEMA_SQL",
+]
+
 

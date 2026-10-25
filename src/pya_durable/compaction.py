@@ -11,7 +11,7 @@ from pya_durable.models import (
     utc_now_iso,
 )
 from pya_durable.replay import durable_tool
-from pya_durable.storage import AioSqliteStorage
+from pya_durable.storage import DurableStorage
 
 logger = logging.getLogger("pya_durable.compaction")
 
@@ -24,7 +24,7 @@ class BackgroundCompactor:
     @classmethod
     async def compact_conversation(
         cls,
-        storage: AioSqliteStorage,
+        storage: DurableStorage,
         conversation_id: str,
         leaf_entry_id: str,
         summarizer: Callable[[list[TranscriptEntryRecord]], Awaitable[str] | str] | None = None,
@@ -114,7 +114,7 @@ class BackgroundCompactor:
 
 
 def create_handoff_tool(
-    storage: AioSqliteStorage,
+    storage: DurableStorage,
     conversation_id: str,
     harness: Any = None,
 ) -> Any:
@@ -153,7 +153,7 @@ def create_handoff_tool(
     return handoff
 
 
-def create_search_history_tool(storage: AioSqliteStorage, conversation_id: str) -> Any:
+def create_search_history_tool(storage: DurableStorage, conversation_id: str) -> Any:
     @durable_tool(replay="safe")
     async def search_history(query: str) -> str:
         entries = await storage.get_conversation_transcript(conversation_id)
