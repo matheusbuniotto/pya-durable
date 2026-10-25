@@ -7,7 +7,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Self
+
+from typing_extensions import Self
 
 
 class ExecutionEnvError(Exception):
