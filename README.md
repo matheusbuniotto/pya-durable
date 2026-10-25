@@ -248,10 +248,10 @@ async for event in harness.watch_events():
 Every pull request is verified across unit test suites, real AI provider evaluations, and end-to-end user journeys:
 
 ```bash
-# Run 136 unit & behavioral tests
+# Run 139 unit & behavioral tests
 uv run pytest
 
-# Run the 6 'must-work' behavioral evaluations (high-fidelity fallback)
+# Run the 9 core behavioral evaluations (high-fidelity fallback)
 uv run python scripts/run_evals.py
 
 # Run evaluations with OpenRouter & GPT-6 Luna

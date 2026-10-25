@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
 
@@ -28,11 +29,19 @@ from pydantic_ai_durable import (
     ApprovalStatus,
     ConversationRecord,
     CrashRecoveryManager,
+    DocumentManager,
     DurableConversation,
     DurableHarness,
+    SagaCoordinator,
+    SagaExecutionError,
+    SagaResult,
+    SubagentManager,
     TaskRecord,
     TaskStatus,
     ToolInvocationStatus,
+    current_durable_context,
+    define_doc,
+    define_saga,
     durable_execution_context,
     durable_tool,
     set_tool_partial_output,
@@ -322,6 +331,165 @@ async def test_eval_6_in_flight_steering(tmp_path: Path) -> None:
         transcript = await storage.get_conversation_transcript("conv-steer")
         steer_entries = [e for e in transcript if "PRIORITY OVERRIDE" in e.message_json]
         assert "Rust" in res.output or len(steer_entries) > 0
+
+
+@pytest.mark.asyncio
+async def test_eval_7_subagent_worker_delegation(tmp_path: Path) -> None:
+    db_path = str(tmp_path / "eval7.sqlite")
+    _agent_base, model_name = get_eval_agent(fallback_text="Code review completed: Potential SQL injection was found in the patch.")
+    is_fallback = "test:" in model_name
+
+    @durable_tool(replay="safe")
+    async def request_code_review(patch: str) -> str:
+        ctx = current_durable_context.get()
+        if ctx is None:
+            return "No active context"
+
+        sub_agent = (
+            Agent(TestModel(custom_output_text="CRITICAL: Potential SQL injection in WHERE clause."))
+            if is_fallback
+            else Agent(model_name, system_prompt="You are a strict security reviewer. Identify any vulnerabilities in one sentence.")
+        )
+        sub_res = await SubagentManager.run_subagent(
+            storage=ctx.storage,
+            parent_task_id=ctx.task_id,
+            agent=sub_agent,
+            prompt=f"Review this patch for security vulnerabilities:\n{patch}",
+        )
+        return str(sub_res.output)
+
+    if is_fallback:
+        parent_agent = Agent(
+            TestModel(custom_output_text="Code review completed: Potential SQL injection was found in the patch."),
+            tools=[request_code_review],
+        )
+    else:
+        parent_agent = Agent(
+            model_name,
+            tools=[request_code_review],
+            system_prompt="You are a lead architect. When asked to evaluate code, always call the request_code_review tool to obtain the expert review.",
+        )
+
+    async with AioSqliteStorage(db_path) as storage:
+        harness = DurableHarness(parent_agent, storage, conversation_id="conv-lead-architect")
+        prompt = "Please review this patch: SELECT * FROM accounts WHERE id = ' + user_input + '"
+        res = await harness.run(prompt)
+        assert res is not None
+
+        tasks = await storage.get_tasks_by_status(TaskStatus.COMPLETED)
+        sub_tasks = [t for t in tasks if t.task_type == "subagent_turn"]
+        assert len(sub_tasks) >= 1
+
+        review_verified = (
+            "injection" in res.output.lower()
+            or "vulnerability" in res.output.lower()
+            or "review" in res.output.lower()
+            or "sql" in res.output.lower()
+        )
+        assert review_verified
+
+
+@pytest.mark.asyncio
+async def test_eval_8_durable_document_state(tmp_path: Path) -> None:
+    db_path = str(tmp_path / "eval8.sqlite")
+    _, model_name = get_eval_agent()
+    is_fallback = "test:" in model_name
+
+    class WorkLogDoc(BaseModel):
+        current_milestone: str = "Planning"
+        entries: list[str] = []
+
+    work_log_def = define_doc("project.worklog", WorkLogDoc, initial=lambda: WorkLogDoc())
+
+    @durable_tool(replay="safe")
+    async def update_milestone(milestone: str, note: str) -> str:
+        ctx = current_durable_context.get()
+        if ctx is None:
+            return "No context"
+        doc = await DocumentManager.get_doc(ctx.storage, work_log_def, ctx.conversation_id)
+        doc.current_milestone = milestone
+        doc.entries.append(note)
+        await DocumentManager.set_doc(ctx.storage, work_log_def, ctx.conversation_id, doc)
+        return f"Milestone updated to '{milestone}' with entry: '{note}'"
+
+    if is_fallback:
+        doc_agent = Agent(
+            TestModel(custom_output_text="I have updated the active milestone to Beta Release with note: core features stabilized."),
+            tools=[update_milestone],
+        )
+    else:
+        doc_agent = Agent(
+            model_name,
+            tools=[update_milestone],
+            system_prompt="You are a release manager. When asked to update a project milestone, call update_milestone.",
+        )
+
+    async with AioSqliteStorage(db_path) as storage:
+        harness = DurableHarness(doc_agent, storage, conversation_id="conv-project-worklog")
+        prompt = "Update the active milestone to 'Beta Release' with note 'core features stabilized'."
+        res = await harness.run(prompt)
+        assert res is not None
+
+        stored_doc = await harness.get_doc(work_log_def)
+        assert stored_doc.current_milestone != "Planning" or len(stored_doc.entries) > 0
+
+
+@pytest.mark.asyncio
+async def test_eval_9_durable_saga_reverse_rollback(tmp_path: Path) -> None:
+    db_path = str(tmp_path / "eval9.sqlite")
+    audit_trail: list[str] = []
+
+    @define_saga(name="cluster_provisioning_saga")
+    class ClusterProvisioningSaga:
+        async def start(self, ctx: Any) -> SagaResult:
+            audit_trail.append("step_allocate_nodes")
+            ctx.state["allocated_nodes"] = ["node-us-east-1a", "node-us-east-1b"]
+            return SagaResult.next("deploy_storage_cluster")
+
+        async def deploy_storage_cluster(self, ctx: Any) -> SagaResult:
+            audit_trail.append("step_deploy_storage_failed")
+            return SagaResult.fail("Storage volume quota exhausted in region")
+
+        async def compensate_start(self, ctx: Any) -> None:
+            nodes = ctx.state.get("allocated_nodes", [])
+            audit_trail.append(f"compensate_released_{'_'.join(nodes)}")
+
+    _, model_name = get_eval_agent()
+    is_fallback = "test:" in model_name
+
+    @durable_tool(replay="safe")
+    async def provision_cluster(cluster_name: str, nodes: int) -> str:
+        ctx = current_durable_context.get()
+        if ctx is None:
+            return "No context"
+        coord = SagaCoordinator(ctx.storage)
+        try:
+            await coord.run_saga(ClusterProvisioningSaga, {"cluster_name": cluster_name, "nodes": nodes})
+            return f"Cluster '{cluster_name}' successfully provisioned."
+        except (SagaExecutionError, RuntimeError) as exc:
+            return f"Cluster provisioning failed: {exc}. All allocated resources have been compensated and released."
+
+    if is_fallback:
+        saga_agent = Agent(
+            TestModel(custom_output_text="Cluster provisioning failed due to storage quota; all reserved nodes have been safely rolled back."),
+            tools=[provision_cluster],
+        )
+    else:
+        saga_agent = Agent(
+            model_name,
+            tools=[provision_cluster],
+            system_prompt="You are an infrastructure orchestrator. When asked to provision a cluster, call provision_cluster.",
+        )
+
+    async with AioSqliteStorage(db_path) as storage:
+        harness = DurableHarness(saga_agent, storage, conversation_id="conv-cluster-orchestrator")
+        prompt = "Provision a 2-node cluster named 'titan-compute' with redundant storage."
+        res = await harness.run(prompt)
+        assert res is not None
+
+        assert "step_allocate_nodes" in audit_trail
+        assert "step_deploy_storage_failed" in audit_trail
+        assert any("compensate_released" in step for step in audit_trail)
 
 
 def test_openrouter_gpt_luna_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
