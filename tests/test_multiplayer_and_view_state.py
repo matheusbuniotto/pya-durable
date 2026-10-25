@@ -43,6 +43,7 @@ async def test_memo_manager_first_write_wins() -> None:
         persisted = await storage.get_memo("conv-1", "approval:deploy")
         assert persisted is not None
         assert persisted.value_json == "true"
+        await storage.close()
 
 
 async def test_memo_across_reopen() -> None:
@@ -76,6 +77,7 @@ async def test_view_state_initial_snapshot() -> None:
         assert "plan:default" in vs.value.docs
         assert vs.value.docs["plan:default"]["title"] == "Feature PR-09"
         assert vs.value.docs["plan:default"]["done"] is True
+        await storage.close()
 
 
 async def test_view_state_reactive_subscription() -> None:
@@ -151,6 +153,7 @@ async def test_high_level_agent_event_translation() -> None:
         types = [type(e) for e in collected_events]
         assert TurnStartedEvent in types
         assert TurnCompletedEvent in types
+        await storage.close()
 
 
 async def test_reactive_document_state() -> None:
@@ -248,6 +251,7 @@ async def test_conversation_view_state_propagation_across_fork() -> None:
         assert vs_child.value.conversation_id == "conv-child"
         assert "child-client" in vs_child.value.connected_clients
         assert "parent-client" not in vs_child.value.connected_clients
+        await storage.close()
 
 
 async def test_subscriber_error_isolation() -> None:
