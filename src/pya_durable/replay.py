@@ -21,6 +21,7 @@ from pya_durable.models import (
     ApprovalRequestRecord,
     ApprovalStatus,
     ReplayPolicy,
+    TaskRecord,
     TaskStatus,
     ToolInvocationRecord,
     ToolInvocationStatus,
@@ -49,6 +50,65 @@ class DurableContext:
     last_invocation_id: str | None = None
     last_tool_name: str | None = None
     last_challenge_token: str | None = None
+
+    async def create_task(
+        self,
+        task_def_or_name: Any,
+        input_data: Any,
+        policy: str = "failFast",
+    ) -> TaskRecord:
+        import uuid
+        child_task_id = f"task-{uuid.uuid4().hex[:12]}"
+        task_name = getattr(task_def_or_name, "name", str(task_def_or_name))
+        in_json = json.dumps(input_data) if not isinstance(input_data, str) else input_data
+        record = TaskRecord(
+            task_id=child_task_id,
+            task_type=task_name,
+            version=1,
+            status=TaskStatus.RUNNING,
+            owner_kind="task",
+            owner_id=self.task_id,
+            phase="start",
+            input_json=in_json,
+            state_json="{}",
+            policy=policy,
+        )
+        await self.storage.insert_task(record)
+        return record
+
+    async def wait_for_task(
+        self,
+        task_id: str,
+        poll_interval: float = 0.05,
+        timeout: float | None = None,
+    ) -> TaskRecord:
+        import time
+        start_time = time.monotonic()
+        while True:
+            rec = await self.storage.get_task(task_id)
+            if rec is not None and rec.status in (
+                TaskStatus.COMPLETED,
+                TaskStatus.FAILED,
+                TaskStatus.ABORTED,
+            ):
+                return rec
+            if timeout is not None and (time.monotonic() - start_time) > timeout:
+                raise TimeoutError(f"Timed out waiting for task {task_id}")
+            await asyncio.sleep(poll_interval)
+
+
+async def create_durable_task(task_def_or_name: Any, input_data: Any, policy: str = "failFast") -> TaskRecord:
+    ctx = current_durable_context.get()
+    if ctx is None:
+        raise RuntimeError("No active durable execution context")
+    return await ctx.create_task(task_def_or_name, input_data, policy=policy)
+
+
+async def wait_for_durable_task(task_id: str, timeout: float | None = None) -> TaskRecord:
+    ctx = current_durable_context.get()
+    if ctx is None:
+        raise RuntimeError("No active durable execution context")
+    return await ctx.wait_for_task(task_id, timeout=timeout)
 
 
 current_durable_context: ContextVar[DurableContext | None] = ContextVar(

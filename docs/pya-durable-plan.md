@@ -645,6 +645,58 @@ Asynchronous challenge token resolution, operator intervention gates, out-of-ban
 
 - [x] Copy lane 1 screenshots into `docs/media/pr-11-review-human-approval-gates.png`.
 
+### PR-12. Durable task sagas, parallel fan-out orchestration, and compensation workflows
+
+Deterministic multi-step saga definition and execution, parallel fan-out task trees with fail-fast and all-settled policies, outcome aggregation, reverse-order compensation workflows on step failure, crash recovery for in-flight sagas, tool-initiated durable task spawning and awaiting, and real-time multiplayer saga streaming.
+
+**Design data shape first.** Model saga entities in `src/pya_durable/models.py` and `src/pya_durable/sagas.py`.
+
+- [x] Domain types and policies: `SagaPolicy` (`FAIL_FAST`, `ALL_SETTLED`), `SagaStatus` (`PENDING`, `RUNNING`, `COMPENSATING`, `COMPLETED`, `FAILED`, `COMPENSATED`), `TaskOutcome` dataclass with status, result, error, and elapsed time, and `SagaStepRecord` dataclass.
+- [x] Fluent saga definition: `define_saga(name)` returning `SagaDefinition` with `.step(name, action, compensate=None)`, `.compensate(fn)`, and immutable step configuration.
+- [x] Orchestrator & child coordination: `SagaCoordinator` with `SagaContext`, `run()`, parallel fan-out child task spawning, recursive compensation rollback in reverse chronological order, and `TaskOutcome` aggregation.
+- [x] Tree runner & replay integration: `TaskRunner.run_saga()` and `TaskRunner.wait_for_task()`, `DurableContext.create_task()` and `DurableContext.wait_for_task()` for tool execution, and portable abort support across `AioSqliteStorage`, `MemoryStorage`, and `JsonlStorage`.
+- [x] Crash reconciliation: `CrashRecoveryManager.reconcile_task()` reconciling `waiting_tasks` status to `RUNNING` (`phase="resumed_tasks"`) when child tasks finish while offline.
+- [x] Real-time multiplayer streaming: `SagaStartedEvent`, `SagaStepCompletedEvent`, `SagaCompensatingEvent`, and `SagaCompletedEvent` published to `stream_hub` and tracked in `ConversationViewState.active_sagas`.
+- [x] Harness integration: `DurableHarness` and `DurableConversation` expose `run_saga()` and `wait_for_task()`.
+
+**Verify, unit.** Run `uv run pytest tests/test_sagas.py`.
+
+- [x] Sequential saga step progression and context data passing.
+- [x] Parallel fan-out child task orchestration with wait_for_task.
+- [x] Outcome aggregation across fan-out child tasks.
+- [x] Fail-fast cascade aborting child tasks on failure.
+- [x] All-settled tolerance continuing despite partial child task failures.
+- [x] Crash recovery and task resumption for waiting parent tasks.
+- [x] Durable tool task spawning and awaiting via replay context.
+- [x] Multi-backend storage parity (SQLite, Memory, JSONL).
+- [x] Multiplayer streaming events and view state active sagas updates.
+- [x] Reverse-order compensation workflow execution on step failure.
+- [x] Partial compensation when failure occurs mid-saga.
+- [x] Harness and conversation run_saga integration.
+
+**Verify, live.** Run `uv run python scripts/verify_pr12.py`.
+
+- [x] Lane 1. Sequential multi-step saga execution and context passing. Save `lane-1-sequential-saga.png`.
+- [x] Lane 2. Parallel fan-out child task orchestration. Save `lane-2-parallel-fanout.png`.
+- [x] Lane 3. Child task outcome aggregation with status and output. Save `lane-3-outcome-aggregation.png`.
+- [x] Lane 4. Fail-fast error propagation and sibling abort cascading. Save `lane-4-failfast-cascade.png`.
+- [x] Lane 5. Reverse-order compensation workflow rollback execution. Save `lane-5-reverse-compensation.png`.
+- [x] Lane 6. All-settled tolerance aggregating partial failures. Save `lane-6-allsettled-tolerance.png`.
+- [x] Lane 7. Crash recovery survival and resumption for waiting tasks. Save `lane-7-crash-recovery-survival.png`.
+- [x] Lane 8. Durable tool spawning and awaiting child tasks. Save `lane-8-durable-tool-task-await.png`.
+- [x] Lane 9. Real-time multiplayer saga streaming and active saga view state. Save `lane-9-multiplayer-streaming.png`.
+- [x] Lane 10. Multi-backend parity across SQLite, Memory, and JSONL storage. Save `lane-10-multibackend-parity.png`.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [x] Metric. Roundtrip saga step execution and compensation dispatch latency across 100 operations in MemoryStorage.
+- [x] Probe. Execute 100 sequential 3-step sagas in MemoryStorage.
+- [x] Rule. Total elapsed time under 15.00 ms (measured 3.14 ms).
+
+**Review gate.** Review card artifact saved. No video required for non-UI headless capability.
+
+- [x] Copy lane 1 screenshots into `docs/media/pr-12-review-task-sagas.png`.
+
 ## Close the program
 
 - [x] Every box above is checked with its evidence.
