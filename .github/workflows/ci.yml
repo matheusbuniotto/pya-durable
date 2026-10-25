@@ -13,7 +13,7 @@ jobs:
     name: Lint, format & complexity
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -27,7 +27,7 @@ jobs:
       matrix:
         python: ["3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -36,7 +36,7 @@ jobs:
     name: Dependency & code security
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       - name: Audit dependencies
         run: uv export --no-hashes --no-emit-project -o requirements.txt -q && uvx pip-audit -r requirements.txt --no-deps --disable-pip
@@ -46,7 +46,7 @@ jobs:
     name: Build & install check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       - run: uv build
       - run: uvx twine check dist/*
