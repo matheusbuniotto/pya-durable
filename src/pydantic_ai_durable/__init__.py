@@ -316,3 +316,29 @@ __all__ = [
     "wait_for_durable_task",
     "wrap_tool",
 ]
+
+import importlib
+import sys
+
+_LEGACY_SUBMODULE_MAP = {
+    "approvals": "pydantic_ai_durable.tasks.approvals",
+    "compaction": "pydantic_ai_durable.extensions.compaction",
+    "docs": "pydantic_ai_durable.extensions.docs",
+    "jsonl_storage": "pydantic_ai_durable.storage.jsonl",
+    "memo": "pydantic_ai_durable.extensions.memo",
+    "memory_storage": "pydantic_ai_durable.storage.memory",
+    "recovery": "pydantic_ai_durable.tasks.recovery",
+    "replay": "pydantic_ai_durable.tasks.replay",
+    "sagas": "pydantic_ai_durable.tasks.sagas",
+    "subagents": "pydantic_ai_durable.extensions.subagents",
+    "task_tree": "pydantic_ai_durable.tasks.tree",
+    "tools": "pydantic_ai_durable.env.tools",
+    "worktrees": "pydantic_ai_durable.env.worktrees",
+}
+
+_this_module = sys.modules.get(__name__)
+for _short_name, _target in _LEGACY_SUBMODULE_MAP.items():
+    _mod = importlib.import_module(_target)
+    sys.modules[f"{__name__}.{_short_name}"] = _mod
+    if _this_module is not None:
+        setattr(_this_module, _short_name, _mod)
