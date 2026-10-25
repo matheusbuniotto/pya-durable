@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 import uuid
@@ -29,10 +30,20 @@ from pya_durable.models import (
     TranscriptEntryRecord,
     utc_now_iso,
 )
+from pya_durable.memo import MemoManager
 from pya_durable.recovery import CrashRecoveryManager
 from pya_durable.steering import global_steering_queue
 from pya_durable.storage import AioSqliteStorage
-from pya_durable.streaming import StreamEvent, stream_hub
+from pya_durable.streaming import (
+    AgentEvent,
+    ConversationViewState,
+    MultiplayerPresenceHub,
+    ReactiveDocumentState,
+    ReactiveViewState,
+    StreamEvent,
+    multiplayer_hub,
+    stream_hub,
+)
 
 if TYPE_CHECKING:
     from pya_durable.env import ExecutionEnv
@@ -97,6 +108,7 @@ class DurableHarness(Generic[TOutput]):
 
     async def _ensure_conversation(self) -> None:
         if not self._initialized:
+            await self.storage.init_db()
             existing = await self.storage.get_conversation(self.conversation_id)
             if existing is None:
                 record = ConversationRecord(
@@ -118,6 +130,7 @@ class DurableHarness(Generic[TOutput]):
         doc_id: str = "default",
         conn: aiosqlite.Connection | None = None,
     ) -> TDoc:
+        await self._ensure_conversation()
         return await DocumentManager.get_doc(
             self.storage,
             doc_def,
@@ -133,6 +146,7 @@ class DurableHarness(Generic[TOutput]):
         doc_id: str = "default",
         conn: aiosqlite.Connection | None = None,
     ) -> None:
+        await self._ensure_conversation()
         await DocumentManager.set_doc(
             self.storage,
             doc_def,
@@ -141,46 +155,123 @@ class DurableHarness(Generic[TOutput]):
             doc_id=doc_id,
             conn=conn,
         )
+        await self.refresh_view_states()
 
-    async def fork(
+    async def document_state(
         self,
-        fork_entry_id: str | None = None,
-        new_conversation_id: str | None = None,
-        agent: Agent[Any, Any] | None = None,
-    ) -> "DurableHarness[Any]":
-        target_fork_id = fork_entry_id or self.current_leaf_entry_id
-        if target_fork_id is None:
-            raise InvalidForkEntryError("Fork entry ID cannot be None")
+        doc_def: DocDefinition[TDoc],
+        doc_id: str = "default",
+    ) -> ReactiveDocumentState[TDoc]:
+        current_val = await self.get_doc(doc_def, doc_id=doc_id)
+        r_doc: ReactiveDocumentState[TDoc] = ReactiveDocumentState(current_val)
+        stream_hub.register_reactive_doc(self.conversation_id, doc_def.doc_type, doc_id, r_doc)
+        return r_doc
 
-        entry = await self.storage.get_transcript_entry(target_fork_id)
-        if entry is None:
-            raise InvalidForkEntryError(
-                f"Fork entry '{target_fork_id}' does not exist in storage"
+    async def memo(self, key: str, value: Any = None) -> Any:
+        return await MemoManager.memo(self.storage, self.conversation_id, key, value)
+
+    def connect_client(self, client_id: str) -> None:
+        multiplayer_hub.connect(self.conversation_id, client_id)
+        try:
+            asyncio.create_task(self.refresh_view_states())
+        except RuntimeError:
+            pass
+
+    def disconnect_client(self, client_id: str) -> None:
+        multiplayer_hub.disconnect(self.conversation_id, client_id)
+        try:
+            asyncio.create_task(self.refresh_view_states())
+        except RuntimeError:
+            pass
+
+    def get_connected_clients(self) -> list[str]:
+        return multiplayer_hub.get_connected_clients(self.conversation_id)
+
+    async def watch_events(self) -> AsyncIterator[AgentEvent]:
+        async for evt in stream_hub.subscribe_events(self.conversation_id):
+            yield evt
+
+    async def view_state(self) -> ReactiveViewState:
+        await self._ensure_conversation()
+        transcript_entries = await self.get_transcript()
+        formatted_entries = []
+        for e in transcript_entries:
+            try:
+                msg = json.loads(e.message_json)
+            except Exception:
+                msg = e.message_json
+            formatted_entries.append({
+                "entry_id": e.entry_id,
+                "kind": e.kind.value,
+                "created_at": e.created_at,
+                "message": msg,
+            })
+
+        doc_records = await self.storage.list_durable_docs(self.conversation_id)
+        docs_dict: dict[str, Any] = {}
+        for d in doc_records:
+            try:
+                docs_dict[f"{d.doc_type}:{d.doc_id}"] = json.loads(d.data_json)
+            except Exception:
+                docs_dict[f"{d.doc_type}:{d.doc_id}"] = d.data_json
+
+        status = "busy" if self._busy else "idle"
+        clients = multiplayer_hub.get_connected_clients(self.conversation_id)
+
+        snapshot = ConversationViewState(
+            conversation_id=self.conversation_id,
+            status=status,
+            current_leaf_entry_id=self.current_leaf_entry_id,
+            entries=formatted_entries,
+            docs=docs_dict,
+            connected_clients=clients,
+            version=1,
+        )
+        rv = ReactiveViewState(snapshot)
+        stream_hub.register_reactive_view(self.conversation_id, rv)
+        return rv
+
+    async def refresh_view_states(self) -> None:
+        views = stream_hub._reactive_views.get(self.conversation_id, set())
+        if not views:
+            return
+        transcript_entries = await self.get_transcript()
+        formatted_entries = []
+        for e in transcript_entries:
+            try:
+                msg = json.loads(e.message_json)
+            except Exception:
+                msg = e.message_json
+            formatted_entries.append({
+                "entry_id": e.entry_id,
+                "kind": e.kind.value,
+                "created_at": e.created_at,
+                "message": msg,
+            })
+
+        doc_records = await self.storage.list_durable_docs(self.conversation_id)
+        docs_dict: dict[str, Any] = {}
+        for d in doc_records:
+            try:
+                docs_dict[f"{d.doc_type}:{d.doc_id}"] = json.loads(d.data_json)
+            except Exception:
+                docs_dict[f"{d.doc_type}:{d.doc_id}"] = d.data_json
+
+        status = "busy" if self._busy else "idle"
+        clients = multiplayer_hub.get_connected_clients(self.conversation_id)
+
+        for rv in list(views):
+            new_state = ConversationViewState(
+                conversation_id=self.conversation_id,
+                status=status,
+                current_leaf_entry_id=self.current_leaf_entry_id,
+                entries=formatted_entries,
+                docs=docs_dict,
+                connected_clients=clients,
+                version=rv.value.version + 1,
             )
+            rv.notify(new_state)
 
-        child_conv_id = new_conversation_id or f"conv-{uuid.uuid4().hex[:12]}"
-        child_agent = agent if agent is not None else self.agent
-
-        record = ConversationRecord(
-            conversation_id=child_conv_id,
-            parent_conversation_id=self.conversation_id,
-            fork_entry_id=target_fork_id,
-            agent_config_json=json.dumps({"name": getattr(child_agent, "name", "agent")}),
-        )
-        await self.storage.insert_conversation(record)
-
-        child = DurableHarness(
-            agent=child_agent,
-            storage=self.storage,
-            conversation_id=child_conv_id,
-            parent_conversation_id=self.conversation_id,
-            fork_entry_id=target_fork_id,
-            compaction_threshold=self.compaction_threshold,
-            auto_compact=self.auto_compact,
-            registry=self.registry,
-        )
-        child._initialized = True
-        return child
 
     async def run(
         self,
@@ -206,6 +297,16 @@ class DurableHarness(Generic[TOutput]):
 
         self._busy = True
         try:
+            stream_hub.publish(
+                self.conversation_id,
+                StreamEvent(
+                    conversation_id=self.conversation_id,
+                    event_type="turn_started",
+                    data={"prompt": prompt, "request_id": request_id},
+                ),
+            )
+            await self.refresh_view_states()
+
             if request_id:
                 existing = await self.storage.get_submission(request_id)
                 if existing is not None and existing.status == SubmissionStatus.SETTLED:
@@ -261,6 +362,19 @@ class DurableHarness(Generic[TOutput]):
 
             self.current_leaf_entry_id = turn_result.leaf_entry_id
 
+            stream_hub.publish(
+                self.conversation_id,
+                StreamEvent(
+                    conversation_id=self.conversation_id,
+                    event_type="turn_completed",
+                    data={
+                        "output": turn_result.output,
+                        "token_usage": turn_result.token_usage,
+                    },
+                ),
+            )
+            await self.refresh_view_states()
+
             if self.auto_compact and BackgroundCompactor.should_compact(
                 turn_result.token_usage.get("total_tokens", 0),
                 threshold=self.compaction_threshold,
@@ -290,6 +404,7 @@ class DurableHarness(Generic[TOutput]):
             return turn_result
         finally:
             self._busy = False
+            await self.refresh_view_states()
 
     async def submit(
         self,

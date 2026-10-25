@@ -50,6 +50,8 @@ class DocumentManager:
         doc_id: str = "default",
         conn: aiosqlite.Connection | None = None,
     ) -> T:
+        if not storage._initialized:
+            await storage.init_db()
         record = await storage.get_durable_doc(doc_id, conversation_id, conn=conn)
         if record is None:
             if doc_def.initial is not None:
@@ -91,6 +93,8 @@ class DocumentManager:
         doc_id: str = "default",
         conn: aiosqlite.Connection | None = None,
     ) -> None:
+        if not storage._initialized:
+            await storage.init_db()
         conv = await storage.get_conversation(conversation_id, conn=conn)
         if conv is None:
             await storage.insert_conversation(
@@ -121,3 +125,19 @@ class DocumentManager:
             updated_at=utc_now_iso(),
         )
         await storage.upsert_durable_doc(record, conn=conn)
+
+        from pya_durable.streaming import StreamEvent, stream_hub
+        stream_hub.publish(
+            conversation_id,
+            StreamEvent(
+                conversation_id=conversation_id,
+                event_type="doc_updated",
+                data={
+                    "doc_id": doc_id,
+                    "kind": doc_def.doc_type,
+                    "version": doc_def.version,
+                },
+            ),
+        )
+        stream_hub.notify_reactive_doc(conversation_id, doc_def.doc_type, doc_id, value)
+
