@@ -67,10 +67,14 @@ def approval_gate(
     prompt: str | None = None,
     timeout_seconds: float | None = None,
     require_approval: bool = True,
+    *,
+    description: str | None = None,
 ) -> Callable[[F], F]:
+    effective_prompt = prompt or description
+
     def decorator(fn: F) -> F:
         fn._requires_approval = require_approval  # type: ignore[attr-defined]
-        fn._approval_prompt = prompt  # type: ignore[attr-defined]
+        fn._approval_prompt = effective_prompt  # type: ignore[attr-defined]
         fn._approval_timeout = timeout_seconds  # type: ignore[attr-defined]
         return fn
 

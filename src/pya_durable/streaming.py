@@ -321,6 +321,10 @@ class ConversationViewState:
     version: int = 1
     timestamp: str = field(default_factory=utc_now_iso)
 
+    @property
+    def transcript(self) -> list[dict[str, Any]]:
+        return self.entries
+
 
 class ReactiveViewState:
     def __init__(self, initial_state: ConversationViewState) -> None:

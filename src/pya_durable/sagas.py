@@ -114,8 +114,12 @@ class SagaContext:
             state=self.state,
         )
 
+    spawn_child = spawn
+
     def next_step(self, step_name: str) -> SagaResult:
         return SagaResult.next(step=step_name, state=self.state)
+
+    transition_to = next_step
 
     def complete(self, result: Any = None) -> SagaResult:
         return SagaResult.complete(result=result, state=self.state)

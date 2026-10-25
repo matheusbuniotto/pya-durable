@@ -164,7 +164,7 @@ def define_task(
     abort_handler: Callable[[TaskContext], Awaitable[None]] | None = None,
 ) -> Any:
     if target is None:
-        if name is None:
+        if phases is None:
             def decorator(cls_or_fn: Any) -> TaskDefinition:
                 return _build_task_def(
                     cls_or_fn,
