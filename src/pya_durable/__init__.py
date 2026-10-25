@@ -1,3 +1,11 @@
+from pya_durable.approvals import (
+    ApprovalExpiredError,
+    ApprovalManager,
+    ApprovalRejectedError,
+    ApprovalRequiredError,
+    InvalidApprovalDecisionError,
+    approval_gate,
+)
 from pya_durable.branching import (
     DurableConversation,
     InvalidForkEntryError,
@@ -46,6 +54,10 @@ from pya_durable.extensions import (
 from pya_durable.harness import DurableHarness
 from pya_durable.memo import MemoManager
 from pya_durable.models import (
+    ApprovalDecision,
+    ApprovalRequestRecord,
+    ApprovalStatus,
+    ChallengeToken,
     ConversationId,
     ConversationRecord,
     DocId,
@@ -80,6 +92,8 @@ from pya_durable.storage import (
 )
 from pya_durable.streaming import (
     AgentEvent,
+    ApprovalRequestedEvent,
+    ApprovalResolvedEvent,
     ClientPresenceEvent,
     ConversationStreamHub,
     ConversationViewState,
@@ -123,7 +137,17 @@ from pya_durable.worktrees import GitWorktreeManager
 __all__ = [
     "AgentEvent",
     "AioSqliteStorage",
+    "ApprovalDecision",
+    "ApprovalExpiredError",
+    "ApprovalManager",
+    "ApprovalRejectedError",
+    "ApprovalRequestRecord",
+    "ApprovalRequestedEvent",
+    "ApprovalRequiredError",
+    "ApprovalResolvedEvent",
+    "ApprovalStatus",
     "BackgroundCompactor",
+    "ChallengeToken",
     "ClientPresenceEvent",
     "CommandTimeoutError",
     "ConfigurationError",
@@ -154,6 +178,7 @@ __all__ = [
     "GitWorktreeManager",
     "HookContext",
     "HookDecision",
+    "InvalidApprovalDecisionError",
     "InvalidForkEntryError",
     "InvalidReplayPolicyError",
     "InvocationId",
@@ -203,6 +228,7 @@ __all__ = [
     "TurnCompletedEvent",
     "TurnResult",
     "TurnStartedEvent",
+    "approval_gate",
     "check_cycle",
     "create_coding_extension",
     "create_edit_file_tool",

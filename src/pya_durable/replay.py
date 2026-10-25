@@ -9,6 +9,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Callable, TypeVar
 
+from datetime import datetime, timezone
 from pya_durable.extensions import (
     HookContext,
     HookDecision,
@@ -16,9 +17,14 @@ from pya_durable.extensions import (
     global_extension_registry,
 )
 from pya_durable.models import (
+    ApprovalDecision,
+    ApprovalRequestRecord,
+    ApprovalStatus,
     ReplayPolicy,
+    TaskStatus,
     ToolInvocationRecord,
     ToolInvocationStatus,
+    utc_now_iso,
 )
 from pya_durable.storage import DurableStorage
 
@@ -42,6 +48,7 @@ class DurableContext:
     conversation_id: str
     last_invocation_id: str | None = None
     last_tool_name: str | None = None
+    last_challenge_token: str | None = None
 
 
 current_durable_context: ContextVar[DurableContext | None] = ContextVar(
@@ -123,6 +130,9 @@ def durable_tool(
     replay: str | ReplayPolicy | Callable[..., Any] = ReplayPolicy.SAFE,
     timeout_seconds: float | None = None,
     name: str | None = None,
+    require_approval: bool = False,
+    approval_prompt: str | None = None,
+    approval_timeout_seconds: float | None = None,
 ) -> Any:
     if callable(replay) and not isinstance(replay, (str, ReplayPolicy)):
         actual_fn = replay
@@ -133,6 +143,9 @@ def durable_tool(
             policy=policy,
             timeout_seconds=timeout_seconds,
             name=name,
+            require_approval=require_approval,
+            approval_prompt=approval_prompt,
+            approval_timeout_seconds=approval_timeout_seconds,
         )
 
     policy = validate_replay_policy(replay)
@@ -143,6 +156,9 @@ def durable_tool(
             policy=policy,
             timeout_seconds=timeout_seconds,
             name=name,
+            require_approval=require_approval,
+            approval_prompt=approval_prompt,
+            approval_timeout_seconds=approval_timeout_seconds,
         )
 
     return decorator
@@ -153,6 +169,9 @@ def _create_tool_wrapper(
     policy: ReplayPolicy,
     timeout_seconds: float | None,
     name: str | None = None,
+    require_approval: bool = False,
+    approval_prompt: str | None = None,
+    approval_timeout_seconds: float | None = None,
 ) -> Any:
     tool_name = name if name is not None else fn.__name__
     is_async = inspect.iscoroutinefunction(fn)
@@ -220,11 +239,184 @@ def _create_tool_wrapper(
                 exec_kwargs = kwargs
 
             if ctx is None:
+                needs_approval = (
+                    require_approval
+                    or getattr(fn, "_requires_approval", False)
+                    or (decision is not None and getattr(decision, "require_approval", False))
+                )
+                if needs_approval:
+                    from pya_durable.approvals import ApprovalRequiredError
+                    prompt_template = (
+                        approval_prompt
+                        or getattr(fn, "_approval_prompt", None)
+                        or (getattr(decision, "approval_prompt", None) if decision else None)
+                    )
+                    raise ApprovalRequiredError(
+                        challenge_token="standalone-appr",
+                        tool_name=tool_name,
+                        args=args_dict,
+                        prompt_message=prompt_template or f"Approve execution of tool '{tool_name}'",
+                    )
                 if timeout_seconds is not None:
                     res = await asyncio.wait_for(fn(*exec_args, **exec_kwargs), timeout=timeout_seconds)
                 else:
                     res = await fn(*exec_args, **exec_kwargs)
                 return await global_extension_registry.run_after_tool(call_info, res, hook_ctx)
+
+            needs_approval = (
+                require_approval
+                or getattr(fn, "_requires_approval", False)
+                or (decision is not None and getattr(decision, "require_approval", False))
+            )
+            prompt_template = (
+                approval_prompt
+                or getattr(fn, "_approval_prompt", None)
+                or (getattr(decision, "approval_prompt", None) if decision else None)
+            )
+            appr_timeout = approval_timeout_seconds or getattr(fn, "_approval_timeout", None)
+
+            if needs_approval:
+                appr = await ctx.storage.get_approval_by_task_and_tool(ctx.task_id, tool_name)
+                if appr is not None:
+                    if appr.status == ApprovalStatus.PENDING and appr.expires_at is not None:
+                        try:
+                            if datetime.now(timezone.utc) > datetime.fromisoformat(appr.expires_at):
+                                dec = ApprovalDecision(
+                                    status=ApprovalStatus.EXPIRED,
+                                    approver="system",
+                                    reason="Approval deadline expired",
+                                    resolved_at=utc_now_iso(),
+                                )
+                                appr = await ctx.storage.resolve_approval_request(
+                                    challenge_token=appr.challenge_token,
+                                    status=ApprovalStatus.EXPIRED,
+                                    decision_json=dec.model_dump_json(),
+                                    resolved_at=dec.resolved_at,
+                                )
+                        except Exception:
+                            pass
+
+                    if appr.status == ApprovalStatus.APPROVED:
+                        if appr.decision_json:
+                            try:
+                                dec = ApprovalDecision.model_validate_json(appr.decision_json)
+                                if dec.override_args_json:
+                                    overrides = json.loads(dec.override_args_json)
+                                    combined = dict(args_dict)
+                                    combined.update(overrides)
+                                    if exec_args and type(exec_args[0]).__name__ == "RunContext" and "ctx" not in combined:
+                                        exec_args = (exec_args[0],)
+                                    else:
+                                        exec_args = ()
+                                    exec_kwargs = combined
+                            except Exception:
+                                pass
+                    elif appr.status == ApprovalStatus.REJECTED:
+                        reason = ""
+                        if appr.decision_json:
+                            try:
+                                dec = ApprovalDecision.model_validate_json(appr.decision_json)
+                                reason = dec.reason
+                            except Exception:
+                                pass
+                        msg = f"Tool execution rejected by human operator. Reason: {reason or 'Denied'}"
+                        invocation_id = f"inv-{uuid.uuid4().hex[:16]}"
+                        ctx.last_invocation_id = invocation_id
+                        ctx.last_tool_name = tool_name
+                        args_json = _serialize_arguments(fn, *exec_args, **exec_kwargs)
+                        record = ToolInvocationRecord(
+                            invocation_id=invocation_id,
+                            task_id=ctx.task_id,
+                            conversation_id=ctx.conversation_id,
+                            tool_name=tool_name,
+                            args_json=args_json,
+                            replay_policy=policy,
+                            status=ToolInvocationStatus.FAILED,
+                            error_message=msg,
+                        )
+                        await ctx.storage.record_tool_started(record)
+                        await ctx.storage.record_tool_failed(invocation_id, msg)
+                        from pya_durable.approvals import ApprovalRejectedError
+                        raise ApprovalRejectedError(challenge_token=appr.challenge_token, reason=reason)
+                    elif appr.status == ApprovalStatus.EXPIRED:
+                        msg = "Tool execution approval challenge expired."
+                        invocation_id = f"inv-{uuid.uuid4().hex[:16]}"
+                        ctx.last_invocation_id = invocation_id
+                        ctx.last_tool_name = tool_name
+                        args_json = _serialize_arguments(fn, *exec_args, **exec_kwargs)
+                        record = ToolInvocationRecord(
+                            invocation_id=invocation_id,
+                            task_id=ctx.task_id,
+                            conversation_id=ctx.conversation_id,
+                            tool_name=tool_name,
+                            args_json=args_json,
+                            replay_policy=policy,
+                            status=ToolInvocationStatus.FAILED,
+                            error_message=msg,
+                        )
+                        await ctx.storage.record_tool_started(record)
+                        await ctx.storage.record_tool_failed(invocation_id, msg)
+                        from pya_durable.approvals import ApprovalExpiredError
+                        raise ApprovalExpiredError(challenge_token=appr.challenge_token)
+                    else:
+                        ctx.last_challenge_token = appr.challenge_token
+                        from pya_durable.approvals import ApprovalRequiredError
+                        raise ApprovalRequiredError(
+                            challenge_token=appr.challenge_token,
+                            tool_name=tool_name,
+                            args=args_dict,
+                            prompt_message=appr.prompt_message,
+                            expires_at=appr.expires_at,
+                        )
+                else:
+                    from pya_durable.approvals import ApprovalManager, ApprovalRequiredError
+
+                    appr_mgr = ApprovalManager(ctx.storage)
+                    record = await appr_mgr.create_challenge(
+                        task_id=ctx.task_id,
+                        conversation_id=ctx.conversation_id,
+                        tool_name=tool_name,
+                        args=args_dict,
+                        prompt_message=prompt_template,
+                        timeout_seconds=appr_timeout,
+                    )
+                    ctx.last_challenge_token = record.challenge_token
+
+                    invocation_id = f"inv-{uuid.uuid4().hex[:16]}"
+                    ctx.last_invocation_id = invocation_id
+                    ctx.last_tool_name = tool_name
+                    args_json = _serialize_arguments(fn, *exec_args, **exec_kwargs)
+                    inv_record = ToolInvocationRecord(
+                        invocation_id=invocation_id,
+                        task_id=ctx.task_id,
+                        conversation_id=ctx.conversation_id,
+                        tool_name=tool_name,
+                        args_json=args_json,
+                        replay_policy=policy,
+                        status=ToolInvocationStatus.DEFERRED,
+                        partial_output=f"Approval challenge token: {record.challenge_token}",
+                    )
+                    await ctx.storage.record_tool_started(inv_record)
+
+                    await ctx.storage.update_task_state(
+                        task_id=ctx.task_id,
+                        status=TaskStatus.WAITING,
+                        phase="waiting_approval",
+                        state_json=json.dumps({
+                            "waiting_approval": True,
+                            "challenge_token": record.challenge_token,
+                            "tool_name": tool_name,
+                        }),
+                        checkpoint_json=record.challenge_token,
+                    )
+
+                    raise ApprovalRequiredError(
+                        challenge_token=record.challenge_token,
+                        tool_name=tool_name,
+                        args=args_dict,
+                        prompt_message=record.prompt_message,
+                        expires_at=record.expires_at,
+                    )
 
             invocation_id = f"inv-{uuid.uuid4().hex[:16]}"
             ctx.last_invocation_id = invocation_id
@@ -374,6 +566,9 @@ def _create_tool_wrapper(
     wrapper.replay_policy = policy  # type: ignore[attr-defined]
     wrapper.timeout_seconds = timeout_seconds  # type: ignore[attr-defined]
     wrapper.raw_func = fn  # type: ignore[attr-defined]
+    wrapper._requires_approval = require_approval or getattr(fn, "_requires_approval", False)  # type: ignore[attr-defined]
+    wrapper._approval_prompt = approval_prompt or getattr(fn, "_approval_prompt", None)  # type: ignore[attr-defined]
+    wrapper._approval_timeout = approval_timeout_seconds or getattr(fn, "_approval_timeout", None)  # type: ignore[attr-defined]
 
     TOOL_REGISTRY[tool_name] = wrapper
     return wrapper

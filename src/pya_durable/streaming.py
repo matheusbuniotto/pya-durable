@@ -96,6 +96,29 @@ class ClientPresenceEvent(AgentEvent):
     event_type: str = "client_presence"
 
 
+@dataclass(frozen=True)
+class ApprovalRequestedEvent(AgentEvent):
+    challenge_token: str = ""
+    task_id: str = ""
+    tool_name: str = ""
+    args: dict[str, Any] = field(default_factory=dict)
+    prompt_message: str = ""
+    expires_at: str | None = None
+    event_type: str = "approval_requested"
+
+
+@dataclass(frozen=True)
+class ApprovalResolvedEvent(AgentEvent):
+    challenge_token: str = ""
+    task_id: str = ""
+    status: str = "approved"  # "approved" | "rejected" | "expired"
+    approver: str = "operator"
+    reason: str = ""
+    override_args: dict[str, Any] | None = None
+    resolved_at: str = ""
+    event_type: str = "approval_resolved"
+
+
 def translate_stream_event(event: StreamEvent) -> AgentEvent:
     data = event.data or {}
     et = event.event_type
@@ -195,6 +218,30 @@ def translate_stream_event(event: StreamEvent) -> AgentEvent:
                 timestamp=event.timestamp,
             )
 
+    if et == "approval_requested":
+        return ApprovalRequestedEvent(
+            conversation_id=event.conversation_id,
+            challenge_token=str(data.get("challenge_token", "")),
+            task_id=str(data.get("task_id", "")),
+            tool_name=str(data.get("tool_name", "")),
+            args=data.get("args", {}),
+            prompt_message=str(data.get("prompt_message", "")),
+            expires_at=data.get("expires_at"),
+            timestamp=event.timestamp,
+        )
+    if et == "approval_resolved":
+        return ApprovalResolvedEvent(
+            conversation_id=event.conversation_id,
+            challenge_token=str(data.get("challenge_token", "")),
+            task_id=str(data.get("task_id", "")),
+            status=str(data.get("status", "approved")),
+            approver=str(data.get("approver", "operator")),
+            reason=str(data.get("reason", "")),
+            override_args=data.get("override_args"),
+            resolved_at=str(data.get("resolved_at", "")),
+            timestamp=event.timestamp,
+        )
+
     return AgentEvent(
         conversation_id=event.conversation_id,
         event_type=et,
@@ -211,6 +258,7 @@ class ConversationViewState:
     docs: dict[str, Any] = field(default_factory=dict)
     active_task: dict[str, Any] | None = None
     connected_clients: list[str] = field(default_factory=list)
+    pending_approvals: list[dict[str, Any]] = field(default_factory=list)
     version: int = 1
     timestamp: str = field(default_factory=utc_now_iso)
 

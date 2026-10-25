@@ -12,6 +12,7 @@ from pydantic_ai.messages import (
     ToolCallPart,
 )
 
+from pya_durable.approvals import ApprovalRequiredError
 from pya_durable.models import (
     TaskStatus,
     TranscriptEntryKind,
@@ -42,6 +43,8 @@ class TurnResult(Generic[TOutput]):
     leaf_entry_id: str
     all_messages: list[ModelMessage]
     token_usage: dict[str, int]
+    challenge_token: str | None = None
+    waiting_approval: bool = False
 
 
 class DurableStepEngine:
@@ -221,18 +224,24 @@ class DurableStepEngine:
                             node_data=node,
                         )
 
-                    final_output = runner.result.output
-                    await self.storage.update_task_state(
-                        task_id=task_id,
-                        status=TaskStatus.COMPLETED,
-                        phase="completed",
-                        state_json=json.dumps({
-                            "output": str(final_output) if not hasattr(final_output, "model_dump_json") else final_output.model_dump_json(),
-                            "usage": cumulative_usage,
-                        }),
-                        checkpoint_json=current_parent_id,
-                    )
+                    current_task = await self.storage.get_task(task_id)
+                    if current_task is not None and current_task.status == TaskStatus.WAITING:
+                        pass
+                    else:
+                        final_output = runner.result.output
+                        await self.storage.update_task_state(
+                            task_id=task_id,
+                            status=TaskStatus.COMPLETED,
+                            phase="completed",
+                            state_json=json.dumps({
+                                "output": str(final_output) if not hasattr(final_output, "model_dump_json") else final_output.model_dump_json(),
+                                "usage": cumulative_usage,
+                            }),
+                            checkpoint_json=current_parent_id,
+                        )
 
+        except ApprovalRequiredError:
+            return
         except Exception as exc:
             await self.storage.update_task_state(
                 task_id=task_id,
@@ -367,6 +376,12 @@ class DurableStepEngine:
                             stopped_early = True
                             break
 
+                    current_task = await self.storage.get_task(task_id)
+                    is_waiting = current_task is not None and current_task.status == TaskStatus.WAITING
+                    challenge_tok = None
+                    if is_waiting and current_task is not None:
+                        challenge_tok = current_task.checkpoint_json
+
                     if stopped_early:
                         await self.storage.update_task_state(
                             task_id=task_id,
@@ -379,7 +394,7 @@ class DurableStepEngine:
                             }),
                             checkpoint_json=current_parent_id,
                         )
-                    else:
+                    elif not is_waiting:
                         if extracted_output is None and hasattr(runner, "result") and runner.result is not None:
                             extracted_output = runner.result.output
 
@@ -399,6 +414,30 @@ class DurableStepEngine:
                             checkpoint_json=current_parent_id,
                         )
 
+        except ApprovalRequiredError as exc:
+            leaf_id = current_parent_id or ""
+            ancestor_entries = await self.storage.get_ancestor_entries(leaf_id)
+            messages: list[ModelMessage] = []
+            for e in ancestor_entries:
+                if e.kind in (
+                    TranscriptEntryKind.MODEL_REQUEST,
+                    TranscriptEntryKind.MODEL_RESPONSE,
+                    TranscriptEntryKind.TOOL_CALL,
+                ):
+                    try:
+                        parsed = ModelMessagesTypeAdapter.validate_json(e.message_json)
+                        messages.extend(parsed)
+                    except Exception:
+                        pass
+
+            return TurnResult(
+                output=None,  # type: ignore[arg-type]
+                leaf_entry_id=leaf_id,
+                all_messages=messages,
+                token_usage=cumulative_usage,
+                challenge_token=exc.challenge_token,
+                waiting_approval=True,
+            )
         except Exception as exc:
             await self.storage.update_task_state(
                 task_id=task_id,
@@ -433,4 +472,6 @@ class DurableStepEngine:
             leaf_entry_id=leaf_id,
             all_messages=messages,
             token_usage=cumulative_usage,
+            challenge_token=challenge_tok,
+            waiting_approval=is_waiting,
         )

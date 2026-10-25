@@ -593,7 +593,57 @@ Decoupled storage persistence with an abstract `DurableStorage` protocol, zero-d
 
 **Review gate.** Review card artifact saved. No video required for non-UI headless capability.
 
-- [x] Copy lane 1 screenshots into `docs/media/pr-10-review-pluggable-storage.png`.
+### PR-11. Deferred tools, human approval gates, and challenge token resolution
+
+Asynchronous challenge token resolution, operator intervention gates, out-of-band resolution with argument overriding, crash survival in WAITING status, dynamic expiration deadlines, and real-time multiplayer approval streaming.
+
+**Design data shape first.** Model approval entities in `src/pya_durable/models.py`, `src/pya_durable/approvals.py`, `src/pya_durable/storage.py`, and `src/pya_durable/streaming.py`.
+
+- [x] Challenge token domain types: `ChallengeToken` NewType, `ApprovalStatus` enum (`PENDING`, `APPROVED`, `REJECTED`, `EXPIRED`), `ApprovalDecision`, and `ApprovalRequestRecord`.
+- [x] Storage relational schema and ledger replay: `approvals` table with foreign key indices in `AioSqliteStorage`, in-memory dict in `MemoryStorage`, and append-only replay ledger lines in `JsonlStorage`.
+- [x] Interception & deferred tools: `@approval_gate` and `@durable_tool(require_approval=True)` generating challenge tokens, recording `ToolInvocationStatus.DEFERRED`, and transitioning task to `TaskStatus.WAITING` with `phase="waiting_approval"`.
+- [x] Resolution & argument overrides: `ApprovalManager.resolve()` supporting `approved=True` with optional `override_args`, `approved=False` with rejection reason, and audit logging.
+- [x] Crash resilience across process exits: `CrashRecoveryManager.reconcile_task()` preserving `TaskStatus.WAITING` while offline and transitioning to `TaskStatus.RUNNING` (`phase="resumed_approved"`) upon offline approval.
+- [x] Real-time streaming & view state: `ApprovalRequestedEvent` and `ApprovalResolvedEvent` published to `stream_hub` and `multiplayer_hub`, with reactive `pending_approvals` tracked in `ConversationViewState`.
+- [x] Harness integration: `DurableHarness` and `DurableConversation` expose `approvals`, `resolve_approval()`, `list_pending_approvals()`, and `wait_for_approval()`.
+
+**Verify, unit.** Run `uv run pytest tests/test_approvals.py`.
+
+- [x] Approval CRUD and challenge token lifecycle across AioSqliteStorage.
+- [x] In-memory storage approval lifecycle and rejection resolution.
+- [x] Append-only JsonlStorage approval persistence and replay across restarts.
+- [x] Dynamic expiration detection for elapsed approval deadlines.
+- [x] Double-resolution guard raising InvalidApprovalDecisionError.
+- [x] Durable tool approval gate generating DEFERRED invocation and WAITING task state.
+- [x] Resumption execution continuation after approval.
+- [x] Approver runtime argument overrides rebinding tool arguments.
+- [x] Rejection enforcement raising ApprovalRejectedError with operator reason.
+- [x] Extension hook approval gate dynamically intercepting sensitive operations.
+- [x] Crash recovery reconciliation after offline human approval.
+- [x] Harness view state reactive pending approvals and resolution updates.
+
+**Verify, live.** Run `uv run python scripts/verify_pr11.py`.
+
+- [x] Lane 1. Deferred Tool Interception & Challenge Token Generation. Save `lane-1-deferred-tool-gate.png`.
+- [x] Lane 2. Human Approval Resolution with Approved Status. Save `lane-2-approval-resolution.png`.
+- [x] Lane 3. Resumption Execution Continuation after Approval. Save `lane-3-resumption-continuation.png`.
+- [x] Lane 4. Human Rejection Enforcement and Error Handling. Save `lane-4-rejection-enforcement.png`.
+- [x] Lane 5. Runtime Argument Overrides by Approver. Save `lane-5-argument-overrides.png`.
+- [x] Lane 6. Dynamic Timeout & Expiration Enforcement. Save `lane-6-dynamic-expiration.png`.
+- [x] Lane 7. Extension Hook Approval Gates. Save `lane-7-extension-hook-gates.png`.
+- [x] Lane 8. Crash Recovery Survival Across Process Reboots. Save `lane-8-crash-recovery-survival.png`.
+- [x] Lane 9. Multiplayer Streaming and View State Reactive Updates. Save `lane-9-multiplayer-streaming.png`.
+- [x] Lane 10. Multi-Backend Approval Ledger Parity (SQLite, Memory, JSONL). Save `lane-10-multibackend-parity.png`.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [x] Metric. Roundtrip approval challenge creation and resolution across 100 operations in MemoryStorage.
+- [x] Probe. Execute 100 sequential create_challenge and resolve operations in MemoryStorage.
+- [x] Rule. Total elapsed time under 15.00 ms (measured 1.44 ms).
+
+**Review gate.** Review card artifact saved. No video required for non-UI headless capability.
+
+- [x] Copy lane 1 screenshots into `docs/media/pr-11-review-human-approval-gates.png`.
 
 ## Close the program
 

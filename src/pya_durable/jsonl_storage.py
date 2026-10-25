@@ -6,6 +6,8 @@ from typing import Any
 
 from pya_durable.memory_storage import MemoryStorage
 from pya_durable.models import (
+    ApprovalRequestRecord,
+    ApprovalStatus,
     ConversationRecord,
     DurableDocRecord,
     MemoRecord,
@@ -81,6 +83,26 @@ class JsonlStorage(MemoryStorage):
                                 self._memos[k] = rec_memo
                         elif entity == "memo_delete":
                             self._memos.pop((data["conversation_id"], data["key"]), None)
+                        elif entity == "approval_insert":
+                            rec_appr = ApprovalRequestRecord.model_validate(data)
+                            self._approvals[rec_appr.challenge_token] = rec_appr
+                        elif entity == "approval_resolve":
+                            token = data["challenge_token"]
+                            if token in self._approvals:
+                                prev = self._approvals[token]
+                                self._approvals[token] = ApprovalRequestRecord(
+                                    challenge_token=prev.challenge_token,
+                                    task_id=prev.task_id,
+                                    conversation_id=prev.conversation_id,
+                                    tool_name=prev.tool_name,
+                                    args_json=prev.args_json,
+                                    prompt_message=prev.prompt_message,
+                                    status=ApprovalStatus(data["status"]),
+                                    decision_json=data.get("decision_json"),
+                                    created_at=prev.created_at,
+                                    resolved_at=data.get("resolved_at"),
+                                    expires_at=prev.expires_at,
+                                )
                     except Exception:
                         pass
             self._initialized = True
@@ -265,6 +287,41 @@ class JsonlStorage(MemoryStorage):
             await self._append_record(
                 "memo_delete",
                 {"conversation_id": conversation_id, "key": key},
+            )
+        return res
+
+    async def insert_approval_request(
+        self,
+        record: ApprovalRequestRecord,
+        conn: Any = None,
+    ) -> None:
+        await super().insert_approval_request(record, conn=conn)
+        await self._append_record("approval_insert", record.model_dump(mode="json"))
+
+    async def resolve_approval_request(
+        self,
+        challenge_token: str,
+        status: ApprovalStatus,
+        decision_json: str | None = None,
+        resolved_at: str | None = None,
+        conn: Any = None,
+    ) -> ApprovalRequestRecord | None:
+        res = await super().resolve_approval_request(
+            challenge_token=challenge_token,
+            status=status,
+            decision_json=decision_json,
+            resolved_at=resolved_at,
+            conn=conn,
+        )
+        if res is not None:
+            await self._append_record(
+                "approval_resolve",
+                {
+                    "challenge_token": challenge_token,
+                    "status": status.value if hasattr(status, "value") else str(status),
+                    "decision_json": decision_json,
+                    "resolved_at": res.resolved_at,
+                },
             )
         return res
 

@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import asyncio
 import inspect
 import json
@@ -10,6 +11,8 @@ from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 
 from pya_durable.engine import DurableStepEngine, TurnResult
 from pya_durable.models import (
+    ApprovalDecision,
+    ApprovalStatus,
     ReplayPolicy,
     TaskRecord,
     TaskStatus,
@@ -46,7 +49,52 @@ class CrashRecoveryManager:
         self.agent = agent
         self.tool_registry = tool_registry if tool_registry is not None else TOOL_REGISTRY
 
-    async def reconcile_task(self, task: TaskRecord) -> TaskRecoveryResult:
+    async def reconcile_task(self, task: TaskRecord | str) -> TaskRecoveryResult:
+        if isinstance(task, str):
+            fetched_task = await self.storage.get_task(task)
+            if fetched_task is None:
+                raise ValueError(f"Task with id {task} not found")
+            task = fetched_task
+
+        if task.status == TaskStatus.WAITING and task.phase == "waiting_approval":
+            challenge_token = task.checkpoint_json
+            if challenge_token:
+                appr = await self.storage.get_approval_request(challenge_token)
+                if appr is not None:
+                    if appr.status == ApprovalStatus.PENDING:
+                        if appr.expires_at is not None:
+                            try:
+                                if datetime.now(timezone.utc) > datetime.fromisoformat(appr.expires_at):
+                                    dec = ApprovalDecision(status=ApprovalStatus.EXPIRED, approver="system", reason="Approval deadline expired", resolved_at=utc_now_iso())
+                                    appr = await self.storage.resolve_approval_request(challenge_token, ApprovalStatus.EXPIRED, dec.model_dump_json(), dec.resolved_at)
+                            except Exception:
+                                pass
+                        if appr.status == ApprovalStatus.PENDING:
+                            return TaskRecoveryResult(
+                                task_id=task.task_id,
+                                previous_status=task.status,
+                                new_status=TaskStatus.WAITING,
+                                reconciled_phase="waiting_approval",
+                                safe_tools_replayed=0,
+                                unsafe_tools_interrupted=0,
+                            )
+                    elif appr.status == ApprovalStatus.APPROVED:
+                        new_status = TaskStatus.RUNNING
+                        reconciled_phase = "resumed_approved"
+                        await self.storage.update_task_state(
+                            task_id=task.task_id,
+                            status=new_status,
+                            phase=reconciled_phase,
+                            state_json=json.dumps({"resumed_approved": True, "challenge_token": challenge_token}),
+                            checkpoint_json=task.checkpoint_json,
+                        )
+                        return TaskRecoveryResult(
+                            task_id=task.task_id,
+                            previous_status=task.status,
+                            new_status=new_status,
+                            reconciled_phase=reconciled_phase,
+                        )
+
         invocations = await self.storage.get_tool_invocations_by_task(task.task_id)
         started_invocations = [
             inv for inv in invocations if inv.status == ToolInvocationStatus.STARTED

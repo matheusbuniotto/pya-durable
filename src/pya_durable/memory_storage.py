@@ -2,6 +2,8 @@ from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
 from pya_durable.models import (
+    ApprovalRequestRecord,
+    ApprovalStatus,
     ConversationRecord,
     DurableDocRecord,
     MemoRecord,
@@ -28,6 +30,7 @@ class MemoryStorage(DurableStorage):
         self._submissions: dict[str, SubmissionRecord] = {}
         self._docs: dict[tuple[str, str], DurableDocRecord] = {}
         self._memos: dict[tuple[str, str], MemoRecord] = {}
+        self._approvals: dict[str, ApprovalRequestRecord] = {}
         self._initialized = False
 
     async def init_db(self) -> None:
@@ -410,3 +413,72 @@ class MemoryStorage(DurableStorage):
         conn: Any = None,
     ) -> bool:
         return self._memos.pop((conversation_id, key), None) is not None
+
+    async def insert_approval_request(
+        self,
+        record: ApprovalRequestRecord,
+        conn: Any = None,
+    ) -> None:
+        self._approvals[record.challenge_token] = record
+
+    async def get_approval_request(
+        self,
+        challenge_token: str,
+        conn: Any = None,
+    ) -> ApprovalRequestRecord | None:
+        return self._approvals.get(challenge_token)
+
+    async def get_approval_by_task_and_tool(
+        self,
+        task_id: str,
+        tool_name: str,
+        conn: Any = None,
+    ) -> ApprovalRequestRecord | None:
+        matching = [
+            a for a in self._approvals.values()
+            if a.task_id == task_id and a.tool_name == tool_name
+        ]
+        if not matching:
+            return None
+        matching.sort(key=lambda a: a.created_at, reverse=True)
+        return matching[0]
+
+    async def list_pending_approvals(
+        self,
+        conversation_id: str | None = None,
+        conn: Any = None,
+    ) -> list[ApprovalRequestRecord]:
+        results = [
+            appr for appr in self._approvals.values()
+            if appr.status == ApprovalStatus.PENDING
+            and (conversation_id is None or appr.conversation_id == conversation_id)
+        ]
+        return sorted(results, key=lambda a: a.created_at)
+
+    async def resolve_approval_request(
+        self,
+        challenge_token: str,
+        status: ApprovalStatus,
+        decision_json: str | None = None,
+        resolved_at: str | None = None,
+        conn: Any = None,
+    ) -> ApprovalRequestRecord | None:
+        existing = self._approvals.get(challenge_token)
+        if existing is None:
+            return None
+        ts = resolved_at or utc_now_iso()
+        updated = ApprovalRequestRecord(
+            challenge_token=existing.challenge_token,
+            task_id=existing.task_id,
+            conversation_id=existing.conversation_id,
+            tool_name=existing.tool_name,
+            args_json=existing.args_json,
+            prompt_message=existing.prompt_message,
+            status=status,
+            decision_json=decision_json,
+            created_at=existing.created_at,
+            resolved_at=ts,
+            expires_at=existing.expires_at,
+        )
+        self._approvals[challenge_token] = updated
+        return updated
