@@ -5,7 +5,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and [
 ## [Unreleased]
 
 ### Added
-- Runnable `examples/` (crash recovery, conversation forking).
+- Runnable `examples/` (crash recovery, conversation forking, approval override).
 - CI: lint, format, complexity, tests on 3.10–3.13, Bandit, pip-audit, CodeQL, build check.
 - LICENSE, CONTRIBUTING, SECURITY.
 

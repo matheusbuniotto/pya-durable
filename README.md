@@ -41,7 +41,7 @@ Run 2: restarting the same process
 ```
 
 The mutating `deploy` step is never silently repeated; safe read-only tools are replayed.
-More in [`examples/`](examples/): [crash recovery](examples/crash_recovery.py), [forking a conversation](examples/fork_conversation.py).
+More in [`examples/`](examples/): [crash recovery](examples/crash_recovery.py), [forking a conversation](examples/fork_conversation.py), [approval gate with argument override](examples/approval_override.py) (an overeager agent tries to `DROP TABLE users`; the operator redirects it to `users_backup`).
 
 ---
 

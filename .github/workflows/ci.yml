@@ -59,3 +59,4 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv run python examples/crash_recovery.py
       - run: uv run python examples/fork_conversation.py
+      - run: uv run python examples/approval_override.py
