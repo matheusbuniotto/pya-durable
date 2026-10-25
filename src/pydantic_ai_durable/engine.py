@@ -12,16 +12,16 @@ from pydantic_ai.messages import (
     ToolCallPart,
 )
 
-from pydantic_ai_durable.approvals import ApprovalRequiredError
+from pydantic_ai_durable.tasks.approvals import ApprovalRequiredError
 from pydantic_ai_durable.models import (
     TaskStatus,
     TranscriptEntryKind,
     TranscriptEntryRecord,
     utc_now_iso,
 )
-from pydantic_ai_durable.replay import durable_execution_context
-from pydantic_ai_durable.storage import DurableStorage
-from pydantic_ai_durable.streaming import StreamEvent, stream_hub
+from pydantic_ai_durable.tasks.replay import durable_execution_context
+from pydantic_ai_durable.storage.base import DurableStorage
+from pydantic_ai_durable.streaming.hub import StreamEvent, stream_hub
 
 logger = logging.getLogger("pydantic_ai_durable.engine")
 

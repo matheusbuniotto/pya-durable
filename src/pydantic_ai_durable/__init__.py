@@ -1,26 +1,10 @@
-from pydantic_ai_durable.approvals import (
-    ApprovalExpiredError,
-    ApprovalManager,
-    ApprovalRejectedError,
-    ApprovalRequiredError,
-    InvalidApprovalDecisionError,
-    approval_gate,
-)
+"""pydantic-ai-durable: Crash-resilient, durable agent harness for PydanticAI."""
+
 from pydantic_ai_durable.branching import (
     Conversation,
     DurableConversation,
     InvalidForkEntryError,
     get_branch_ancestors,
-)
-from pydantic_ai_durable.compaction import (
-    BackgroundCompactor,
-    create_handoff_tool,
-    create_search_history_tool,
-)
-from pydantic_ai_durable.docs import (
-    DocDefinition,
-    DocumentManager,
-    define_doc,
 )
 from pydantic_ai_durable.engine import DurableStepEngine, StepNodeCommit, TurnResult
 from pydantic_ai_durable.env import (
@@ -30,22 +14,38 @@ from pydantic_ai_durable.env import (
     ExecutionEnvError,
     FileInfo,
     FileNotFoundInEnvError,
+    GitWorktreeManager,
     IsolatedSandboxEnv,
     LocalExecutionEnv,
     MockExecutionEnv,
     PathTraversalError,
+    create_coding_extension,
+    create_edit_file_tool,
+    create_exec_command_tool,
+    create_list_dir_tool,
+    create_read_file_tool,
+    create_write_file_tool,
 )
 from pydantic_ai_durable.extensions import (
+    BackgroundCompactor,
+    DocDefinition,
+    DocumentManager,
     ExtensionDefinition,
     ExtensionRegistry,
     HookContext,
     HookDecision,
     LifecycleHook,
+    MemoManager,
     ModelCallInfo,
     PromptSection,
     SectionContext,
+    SubagentManager,
+    SubagentResult,
     ToolCallInfo,
     ToolWrapper,
+    create_handoff_tool,
+    create_search_history_tool,
+    define_doc,
     define_extension,
     define_section,
     global_extension_registry,
@@ -53,7 +53,6 @@ from pydantic_ai_durable.extensions import (
     wrap_tool,
 )
 from pydantic_ai_durable.harness import DurableHarness, Harness
-from pydantic_ai_durable.memo import MemoManager
 from pydantic_ai_durable.models import (
     ApprovalDecision,
     ApprovalRequestRecord,
@@ -95,25 +94,6 @@ from pydantic_ai_durable.providers import (
     openrouter_provider,
     resolve_agent,
 )
-from pydantic_ai_durable.recovery import CrashRecoveryManager, TaskRecoveryResult
-from pydantic_ai_durable.replay import (
-    ConfigurationError,
-    InvalidReplayPolicyError,
-    create_durable_task,
-    current_durable_context,
-    durable_execution_context,
-    durable_tool,
-    set_tool_partial_output,
-    wait_for_durable_task,
-)
-from pydantic_ai_durable.sagas import (
-    SagaContext,
-    SagaCoordinator,
-    SagaDefinition,
-    SagaExecutionError,
-    SagaResult,
-    define_saga,
-)
 from pydantic_ai_durable.steering import (
     SteeringQueue,
     global_steering_queue,
@@ -153,25 +133,37 @@ from pydantic_ai_durable.streaming import (
     stream_hub,
     translate_stream_event,
 )
-from pydantic_ai_durable.subagents import SubagentManager, SubagentResult
-from pydantic_ai_durable.task_tree import (
+from pydantic_ai_durable.tasks import (
+    ApprovalExpiredError,
+    ApprovalManager,
+    ApprovalRejectedError,
+    ApprovalRequiredError,
+    ConfigurationError,
+    CrashRecoveryManager,
     CycleDetectedError,
+    InvalidApprovalDecisionError,
+    InvalidReplayPolicyError,
+    SagaContext,
+    SagaCoordinator,
+    SagaDefinition,
+    SagaExecutionError,
+    SagaResult,
     TaskContext,
     TaskDefinition,
     TaskPhaseResult,
+    TaskRecoveryResult,
     TaskRunner,
+    approval_gate,
     check_cycle,
+    create_durable_task,
+    current_durable_context,
+    define_saga,
     define_task,
+    durable_execution_context,
+    durable_tool,
+    set_tool_partial_output,
+    wait_for_durable_task,
 )
-from pydantic_ai_durable.tools import (
-    create_coding_extension,
-    create_edit_file_tool,
-    create_exec_command_tool,
-    create_list_dir_tool,
-    create_read_file_tool,
-    create_write_file_tool,
-)
-from pydantic_ai_durable.worktrees import GitWorktreeManager
 
 __all__ = [
     "AgentEvent",

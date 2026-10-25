@@ -12,11 +12,11 @@ import aiosqlite
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 
-from pydantic_ai_durable.approvals import ApprovalManager, ApprovalRequestRecord
-from pydantic_ai_durable.compaction import BackgroundCompactor
-from pydantic_ai_durable.docs import DocDefinition, DocumentManager
+from pydantic_ai_durable.tasks.approvals import ApprovalManager, ApprovalRequestRecord
+from pydantic_ai_durable.extensions.compaction import BackgroundCompactor
+from pydantic_ai_durable.extensions.docs import DocDefinition, DocumentManager
 from pydantic_ai_durable.engine import DurableStepEngine, TurnResult
-from pydantic_ai_durable.memo import MemoManager
+from pydantic_ai_durable.extensions.memo import MemoManager
 from pydantic_ai_durable.models import (
     ConversationRecord,
     SubmissionRecord,
@@ -26,10 +26,10 @@ from pydantic_ai_durable.models import (
     TranscriptEntryKind,
     TranscriptEntryRecord,
 )
-from pydantic_ai_durable.providers import ModelsRegistry, global_models_registry, resolve_agent
+from pydantic_ai_durable.providers.registry import ModelsRegistry, global_models_registry, resolve_agent
 from pydantic_ai_durable.steering import global_steering_queue
-from pydantic_ai_durable.storage import DurableStorage
-from pydantic_ai_durable.streaming import (
+from pydantic_ai_durable.storage.base import DurableStorage
+from pydantic_ai_durable.streaming.hub import (
     AgentEvent,
     ConversationViewState,
     ReactiveDocumentState,
@@ -586,8 +586,8 @@ class DurableConversation:
         input_data: Any,
         task_id: str | None = None,
     ) -> Any:
-        from pydantic_ai_durable.sagas import SagaCoordinator
-        from pydantic_ai_durable.task_tree import TaskRunner
+        from pydantic_ai_durable.tasks.sagas import SagaCoordinator
+        from pydantic_ai_durable.tasks.tree import TaskRunner
 
         runner = TaskRunner(self.storage)
         coordinator = SagaCoordinator(self.storage, task_runner=runner, stream_hub=stream_hub)
@@ -606,7 +606,7 @@ class DurableConversation:
         poll_interval: float = 0.05,
         timeout: float | None = None,
     ) -> TaskRecord:
-        from pydantic_ai_durable.task_tree import TaskRunner
+        from pydantic_ai_durable.tasks.tree import TaskRunner
 
         runner = TaskRunner(self.storage)
         return await runner.wait_for_task(task_id, poll_interval=poll_interval, timeout=timeout)
