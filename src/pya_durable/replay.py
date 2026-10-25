@@ -20,7 +20,7 @@ from pya_durable.models import (
     ToolInvocationRecord,
     ToolInvocationStatus,
 )
-from pya_durable.storage import AioSqliteStorage
+from pya_durable.storage import DurableStorage
 
 logger = logging.getLogger("pya_durable.replay")
 
@@ -37,7 +37,7 @@ class InvalidReplayPolicyError(ConfigurationError):
 
 @dataclass
 class DurableContext:
-    storage: AioSqliteStorage
+    storage: DurableStorage
     task_id: str
     conversation_id: str
     last_invocation_id: str | None = None
@@ -53,7 +53,7 @@ TOOL_REGISTRY: dict[str, Callable[..., Any]] = {}
 
 @asynccontextmanager
 async def durable_execution_context(
-    storage: AioSqliteStorage,
+    storage: DurableStorage,
     task_id: str,
     conversation_id: str,
 ) -> AsyncIterator[DurableContext]:

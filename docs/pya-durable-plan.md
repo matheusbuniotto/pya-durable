@@ -548,6 +548,53 @@ Live multi-client observation and steering, reactive snapshot subscriptions, hig
 
 - [x] Copy lane 1 screenshots into `docs/media/pr-09-review-multiplayer-streaming.png`.
 
+### PR-10. Pluggable storage backends (DurableStorage, MemoryStorage, JsonlStorage)
+
+Decoupled storage persistence with an abstract `DurableStorage` protocol, zero-disk ephemeral `MemoryStorage` for fast unit tests and serverless scratch sessions, and append-only `JsonlStorage` for audit-heavy pipelines with startup crash recovery.
+
+**Design data shape first.** Model abstract and concrete storage backends in `src/pya_durable/storage.py`, `src/pya_durable/memory_storage.py`, and `src/pya_durable/jsonl_storage.py`.
+
+- [x] Storage protocol: `DurableStorage` abstract base class defining all persistence operations (conversations, transcripts, tasks, tool invocations, submissions, documents, and memos).
+- [x] Memory storage: `MemoryStorage` zero-disk in-memory storage engine with recursive parent-pointer ancestry traversal and first-write-wins memoization.
+- [x] Jsonl storage: `JsonlStorage` append-only human-readable ledger with atomic file append flushes and complete startup replay recovery.
+- [x] Harness integration: `DurableHarness`, `DurableConversation`, `DurableStepEngine`, `CrashRecoveryManager`, `DocumentManager`, and `MemoManager` accept any `DurableStorage` backend.
+
+**Verify, unit.** Run `uv run pytest tests/test_storage_backends.py`.
+
+- [x] MemoryStorage conversation and transcript CRUD lifecycle.
+- [x] MemoryStorage parent-pointer chronological ancestry traversal.
+- [x] MemoryStorage task registration, phase transitions, and status filtering.
+- [x] MemoryStorage tool invocation tracking and crash reconciliation.
+- [x] MemoryStorage first-write-wins task memoization.
+- [x] JsonlStorage append-only JSON line file structure and fsync durability.
+- [x] JsonlStorage startup replay and crash recovery across instance reopen.
+- [x] DurableHarness end-to-end turn execution with MemoryStorage.
+- [x] DurableHarness end-to-end turn execution with JsonlStorage and document mutation.
+- [x] Multi-conversation transcript forking across pluggable backends.
+
+**Verify, live.** Run `uv run python scripts/verify_pr10.py`.
+
+- [x] Lane 1. Pluggable storage matrix regression vs SQLite trunk. Save `lane-1-backend-regression.png`.
+- [x] Lane 2. MemoryStorage zero-disk in-memory CRUD lifecycle. Save `lane-2-memory-crud.png`.
+- [x] Lane 3. MemoryStorage recursive parent-pointer ancestry traversal. Save `lane-3-memory-ancestry.png`.
+- [x] Lane 4. MemoryStorage tool invocations and replay reconciliation. Save `lane-4-memory-reconcile.png`.
+- [x] Lane 5. MemoryStorage atomic first-write-wins task memoization. Save `lane-5-memory-memo.png`.
+- [x] Lane 6. JsonlStorage append-only ledger file structure. Save `lane-6-jsonl-append.png`.
+- [x] Lane 7. JsonlStorage crash recovery across re-instantiation. Save `lane-7-jsonl-recovery.png`.
+- [x] Lane 8. DurableHarness multi-turn execution with MemoryStorage. Save `lane-8-harness-memory.png`.
+- [x] Lane 9. DurableHarness execution with JsonlStorage and doc mutation. Save `lane-9-harness-jsonl.png`.
+- [x] Lane 10. Multi-conversation forking across pluggable backends. Save `lane-10-forking-backends.png`.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [x] Metric. Roundtrip transcript write, memo write, and memo query latency across 100 operations in MemoryStorage.
+- [x] Probe. Execute 100 sequential insert_transcript_entry, insert_memo, and get_memo operations in MemoryStorage.
+- [x] Rule. Total elapsed time under 15.00 ms (measured 0.63 ms).
+
+**Review gate.** Review card artifact saved. No video required for non-UI headless capability.
+
+- [x] Copy lane 1 screenshots into `docs/media/pr-10-review-pluggable-storage.png`.
+
 ## Close the program
 
 - [x] Every box above is checked with its evidence.

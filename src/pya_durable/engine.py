@@ -19,7 +19,7 @@ from pya_durable.models import (
     utc_now_iso,
 )
 from pya_durable.replay import durable_execution_context
-from pya_durable.storage import AioSqliteStorage
+from pya_durable.storage import DurableStorage
 from pya_durable.streaming import StreamEvent, stream_hub
 
 logger = logging.getLogger("pya_durable.engine")
@@ -45,7 +45,7 @@ class TurnResult(Generic[TOutput]):
 
 
 class DurableStepEngine:
-    def __init__(self, storage: AioSqliteStorage) -> None:
+    def __init__(self, storage: DurableStorage) -> None:
         self.storage = storage
 
     async def _drain_steers(

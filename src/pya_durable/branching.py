@@ -25,7 +25,7 @@ from pya_durable.models import (
 )
 from pya_durable.memo import MemoManager
 from pya_durable.steering import global_steering_queue
-from pya_durable.storage import AioSqliteStorage
+from pya_durable.storage import DurableStorage
 from pya_durable.streaming import (
     AgentEvent,
     ConversationViewState,
@@ -50,7 +50,7 @@ class InvalidForkEntryError(ValueError):
 
 
 async def get_branch_ancestors(
-    storage: AioSqliteStorage,
+    storage: DurableStorage,
     leaf_entry_id: str,
 ) -> list[TranscriptEntryRecord]:
     if not leaf_entry_id:
@@ -62,7 +62,7 @@ class DurableConversation:
     def __init__(
         self,
         conversation_id: str,
-        storage: AioSqliteStorage,
+        storage: DurableStorage,
         agent: Agent[Any, Any] | None = None,
         parent_conversation_id: str | None = None,
         fork_entry_id: str | None = None,
