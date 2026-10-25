@@ -9,6 +9,7 @@ Validates the 6 'must-work' durable agent behaviors:
 6. In-flight active steering mid-turn redirection.
 
 Supports:
+- OpenRouter (`OPENROUTER_API_KEY`, default model: `openrouter:openai/gpt-6-luna`)
 - OpenAI (`OPENAI_API_KEY`)
 - Anthropic (`ANTHROPIC_API_KEY`)
 - Google Gemini (`GEMINI_API_KEY`)
@@ -45,22 +46,29 @@ from pydantic_ai_durable import (
     ToolInvocationStatus,
     durable_execution_context,
     durable_tool,
+    normalize_model_name,
     set_tool_partial_output,
 )
 
 
 def get_agent_for_provider(model_name: str | None = None) -> tuple[Agent, str]:
     """Detect available provider credentials or return high-fidelity fallback agent."""
+    model_name = normalize_model_name(model_name)
     if model_name:
         print(f"[AI Provider] Explicit model requested: {model_name}")
         return Agent(model_name), model_name
 
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
     openai_key = os.environ.get("OPENAI_API_KEY")
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
     gemini_key = os.environ.get("GEMINI_API_KEY")
     groq_key = os.environ.get("GROQ_API_KEY")
 
-    if openai_key and not openai_key.startswith("sk-placeholder"):
+    if openrouter_key and not openrouter_key.startswith("sk-or-placeholder"):
+        model = "openrouter:openai/gpt-6-luna"
+        print(f"[AI Provider] Detected OPENROUTER_API_KEY -> using {model}")
+        return Agent(model), model
+    elif openai_key and not openai_key.startswith("sk-placeholder"):
         model = "openai:gpt-4o-mini"
         print(f"[AI Provider] Detected OPENAI_API_KEY -> using {model}")
         return Agent(model), model
@@ -77,7 +85,7 @@ def get_agent_for_provider(model_name: str | None = None) -> tuple[Agent, str]:
         print(f"[AI Provider] Detected GROQ_API_KEY -> using {model}")
         return Agent(model), model
     else:
-        print("[AI Provider] No live API key found (set OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY).")
+        print("[AI Provider] No live API key found (set OPENROUTER_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY).")
         print("[AI Provider] Running with High-Fidelity TestModel fallback to verify all behavioral harnesses.")
         fallback_model = TestModel()
         return Agent(fallback_model), "test:high-fidelity-fallback"

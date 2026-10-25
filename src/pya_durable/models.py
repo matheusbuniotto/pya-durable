@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal, NewType
+
 from pydantic import BaseModel, ConfigDict, Field
 
 ConversationId = NewType("ConversationId", str)
@@ -213,4 +214,22 @@ class SagaStepRecord(BaseModel):
     status: str = "completed"
     result_json: str | None = None
     executed_at: str = Field(default_factory=utc_now_iso)
+
+
+def normalize_model_name(model_name: str | None) -> str | None:
+    """Normalize model identifiers and shortcuts like 'gpt-luna 6'."""
+    if not model_name:
+        return None
+    cleaned = model_name.strip().lower().replace(" ", "-")
+    if cleaned in (
+        "gpt-luna-6",
+        "gpt-6-luna",
+        "gpt-luna",
+        "openai/gpt-6-luna",
+        "openrouter:gpt-6-luna",
+        "openrouter:openai/gpt-6-luna",
+    ):
+        return "openrouter:openai/gpt-6-luna"
+    return model_name
+
 

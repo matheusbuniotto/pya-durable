@@ -41,12 +41,15 @@ from pydantic_ai_durable import (
 
 def get_eval_agent(fallback_text: str = "ok") -> tuple[Agent[Any, str], str]:
     """Return live provider agent if credentials configured, otherwise high-fidelity TestModel."""
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
     openai_key = os.environ.get("OPENAI_API_KEY")
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
     gemini_key = os.environ.get("GEMINI_API_KEY")
     groq_key = os.environ.get("GROQ_API_KEY")
 
-    if openai_key and not openai_key.startswith("sk-placeholder"):
+    if openrouter_key and not openrouter_key.startswith("sk-or-placeholder"):
+        return Agent("openrouter:openai/gpt-6-luna"), "openrouter:openai/gpt-6-luna"
+    elif openai_key and not openai_key.startswith("sk-placeholder"):
         return Agent("openai:gpt-4o-mini"), "openai:gpt-4o-mini"
     elif anthropic_key:
         return Agent("anthropic:claude-3-5-haiku-latest"), "anthropic:claude-3-5-haiku-latest"
@@ -103,7 +106,13 @@ async def test_eval_2_durable_tool_calling(tmp_path: Path) -> None:
 
     is_live = any(
         os.environ.get(k)
-        for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY")
+        for k in (
+            "OPENROUTER_API_KEY",
+            "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "GEMINI_API_KEY",
+            "GROQ_API_KEY",
+        )
     )
     if is_live:
         agent, _ = get_eval_agent()
@@ -313,3 +322,19 @@ async def test_eval_6_in_flight_steering(tmp_path: Path) -> None:
         transcript = await storage.get_conversation_transcript("conv-steer")
         steer_entries = [e for e in transcript if "PRIORITY OVERRIDE" in e.message_json]
         assert "Rust" in res.output or len(steer_entries) > 0
+
+
+def test_openrouter_gpt_luna_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Validate OpenRouter configuration and resolution for GPT-6 Luna."""
+    from pydantic_ai_durable import normalize_model_name
+
+    assert normalize_model_name("gpt-luna 6") == "openrouter:openai/gpt-6-luna"
+    assert normalize_model_name("gpt-6-luna") == "openrouter:openai/gpt-6-luna"
+    assert normalize_model_name("openai/gpt-6-luna") == "openrouter:openai/gpt-6-luna"
+    assert normalize_model_name("gpt-luna") == "openrouter:openai/gpt-6-luna"
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-mock-testing-key")
+    agent, model_id = get_eval_agent()
+    assert model_id == "openrouter:openai/gpt-6-luna"
+    assert getattr(agent.model, "model_name", None) == "openai/gpt-6-luna"
+

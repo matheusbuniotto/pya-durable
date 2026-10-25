@@ -245,14 +245,23 @@ async for event in harness.watch_events():
 
 ## Testing & Verification
 
-Every pull request is verified across unit test suites, live swarm scenarios, and sub-millisecond performance probes:
+Every pull request is verified across unit test suites, real AI provider evaluations, and end-to-end user journeys:
 
 ```bash
-# Run 129 unit tests
+# Run 136 unit & behavioral tests
 uv run pytest
 
-# Run swarm verification lanes
-uv run python scripts/verify_pr12.py
+# Run the 6 'must-work' behavioral evaluations (high-fidelity fallback)
+uv run python scripts/run_evals.py
+
+# Run evaluations with OpenRouter & GPT-6 Luna
+OPENROUTER_API_KEY=sk-or-v1-... uv run python scripts/run_evals.py
+
+# Or specify model shortcuts directly
+uv run python scripts/run_evals.py --model "gpt-luna 6"
+
+# Run the true user tour across 8 real-world developer scenarios
+uv run python scripts/true_user_tour.py
 ```
 
 ---

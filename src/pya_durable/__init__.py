@@ -80,6 +80,7 @@ from pya_durable.models import (
     ToolInvocationStatus,
     TranscriptEntryKind,
     TranscriptEntryRecord,
+    normalize_model_name,
 )
 from pya_durable.recovery import CrashRecoveryManager, TaskRecoveryResult
 from pya_durable.replay import (
@@ -287,6 +288,7 @@ __all__ = [
     "global_steering_queue",
     "hook",
     "multiplayer_hub",
+    "normalize_model_name",
     "set_tool_partial_output",
     "stream_hub",
     "translate_stream_event",
