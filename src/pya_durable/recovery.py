@@ -95,6 +95,69 @@ class CrashRecoveryManager:
                             reconciled_phase=reconciled_phase,
                         )
 
+        if task.status == TaskStatus.WAITING and task.phase == "waiting_tasks":
+            ckpt = {}
+            if task.checkpoint_json:
+                try:
+                    ckpt = json.loads(task.checkpoint_json)
+                except Exception:
+                    pass
+            waiting_on = ckpt.get("waiting_on", [])
+            next_step = ckpt.get("next_step", "resumed")
+            policy = ckpt.get("policy", "failFast")
+
+            children: list[TaskRecord] = []
+            for cid in waiting_on:
+                crec = await self.storage.get_task(cid)
+                if crec is not None:
+                    children.append(crec)
+
+            all_terminal = len(children) == len(waiting_on) and all(
+                c.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.ABORTED)
+                for c in children
+            )
+            has_failure = any(c.status in (TaskStatus.FAILED, TaskStatus.ABORTED) for c in children)
+
+            if policy == "failFast" and has_failure:
+                new_status = TaskStatus.FAILED
+                reconciled_phase = "failed"
+                await self.storage.update_task_state(
+                    task_id=task.task_id,
+                    status=new_status,
+                    phase=reconciled_phase,
+                    state_json=json.dumps({"error": "Child task failed while waiting", "reconciled": True}),
+                )
+                return TaskRecoveryResult(
+                    task_id=task.task_id,
+                    previous_status=task.status,
+                    new_status=new_status,
+                    reconciled_phase=reconciled_phase,
+                )
+
+            if all_terminal:
+                new_status = TaskStatus.RUNNING
+                reconciled_phase = "resumed_tasks"
+                await self.storage.update_task_state(
+                    task_id=task.task_id,
+                    status=new_status,
+                    phase=reconciled_phase,
+                    state_json=json.dumps({"resumed_next_step": next_step, "reconciled": True}),
+                    checkpoint_json=task.checkpoint_json,
+                )
+                return TaskRecoveryResult(
+                    task_id=task.task_id,
+                    previous_status=task.status,
+                    new_status=new_status,
+                    reconciled_phase=reconciled_phase,
+                )
+            else:
+                return TaskRecoveryResult(
+                    task_id=task.task_id,
+                    previous_status=task.status,
+                    new_status=TaskStatus.WAITING,
+                    reconciled_phase="waiting_tasks",
+                )
+
         invocations = await self.storage.get_tool_invocations_by_task(task.task_id)
         started_invocations = [
             inv for inv in invocations if inv.status == ToolInvocationStatus.STARTED

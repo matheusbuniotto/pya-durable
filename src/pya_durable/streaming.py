@@ -119,6 +119,35 @@ class ApprovalResolvedEvent(AgentEvent):
     event_type: str = "approval_resolved"
 
 
+@dataclass(frozen=True)
+class SagaStartedEvent(AgentEvent):
+    saga_id: str = ""
+    name: str = ""
+    event_type: str = "saga_started"
+
+
+@dataclass(frozen=True)
+class SagaStepCompletedEvent(AgentEvent):
+    saga_id: str = ""
+    step: str = ""
+    event_type: str = "saga_step_completed"
+
+
+@dataclass(frozen=True)
+class SagaCompensatingEvent(AgentEvent):
+    saga_id: str = ""
+    step: str = ""
+    reason: str = ""
+    event_type: str = "saga_compensating"
+
+
+@dataclass(frozen=True)
+class SagaCompletedEvent(AgentEvent):
+    saga_id: str = ""
+    result: Any = None
+    event_type: str = "saga_completed"
+
+
 def translate_stream_event(event: StreamEvent) -> AgentEvent:
     data = event.data or {}
     et = event.event_type
@@ -241,6 +270,35 @@ def translate_stream_event(event: StreamEvent) -> AgentEvent:
             resolved_at=str(data.get("resolved_at", "")),
             timestamp=event.timestamp,
         )
+    if et == "saga_started":
+        return SagaStartedEvent(
+            conversation_id=event.conversation_id,
+            saga_id=str(data.get("saga_id", "")),
+            name=str(data.get("name", "")),
+            timestamp=event.timestamp,
+        )
+    if et == "saga_step_completed":
+        return SagaStepCompletedEvent(
+            conversation_id=event.conversation_id,
+            saga_id=str(data.get("saga_id", "")),
+            step=str(data.get("step", "")),
+            timestamp=event.timestamp,
+        )
+    if et == "saga_compensating":
+        return SagaCompensatingEvent(
+            conversation_id=event.conversation_id,
+            saga_id=str(data.get("saga_id", "")),
+            step=str(data.get("step", "")),
+            reason=str(data.get("reason", "")),
+            timestamp=event.timestamp,
+        )
+    if et == "saga_completed":
+        return SagaCompletedEvent(
+            conversation_id=event.conversation_id,
+            saga_id=str(data.get("saga_id", "")),
+            result=data.get("result"),
+            timestamp=event.timestamp,
+        )
 
     return AgentEvent(
         conversation_id=event.conversation_id,
@@ -259,6 +317,7 @@ class ConversationViewState:
     active_task: dict[str, Any] | None = None
     connected_clients: list[str] = field(default_factory=list)
     pending_approvals: list[dict[str, Any]] = field(default_factory=list)
+    active_sagas: list[dict[str, Any]] = field(default_factory=list)
     version: int = 1
     timestamp: str = field(default_factory=utc_now_iso)
 

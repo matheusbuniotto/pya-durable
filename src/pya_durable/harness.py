@@ -489,6 +489,37 @@ class DurableHarness(Generic[TOutput]):
             timeout=timeout,
         )
 
+    async def run_saga(
+        self,
+        saga_def: Any,
+        input_data: Any,
+        task_id: str | None = None,
+    ) -> Any:
+        from pya_durable.sagas import SagaCoordinator
+        from pya_durable.task_tree import TaskRunner
+
+        runner = TaskRunner(self.storage)
+        coordinator = SagaCoordinator(self.storage, task_runner=runner, stream_hub=stream_hub)
+        return await coordinator.run_saga(
+            saga_def=saga_def,
+            input_data=input_data,
+            task_id=task_id,
+            owner_kind="conversation",
+            owner_id=self.conversation_id,
+            conversation_id=self.conversation_id,
+        )
+
+    async def wait_for_task(
+        self,
+        task_id: str,
+        poll_interval: float = 0.05,
+        timeout: float | None = None,
+    ) -> TaskRecord:
+        from pya_durable.task_tree import TaskRunner
+
+        runner = TaskRunner(self.storage)
+        return await runner.wait_for_task(task_id, poll_interval=poll_interval, timeout=timeout)
+
     async def submit(
         self,
         prompt: str | None = None,

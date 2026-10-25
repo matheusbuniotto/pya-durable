@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Literal, NewType
+from typing import Any, Literal, NewType
 from pydantic import BaseModel, ConfigDict, Field
 
 ConversationId = NewType("ConversationId", str)
@@ -172,4 +172,45 @@ class ApprovalRequestRecord(BaseModel):
     created_at: str = Field(default_factory=utc_now_iso)
     resolved_at: str | None = None
     expires_at: str | None = None
+
+
+class SagaPolicy(str, Enum):
+    FAIL_FAST = "failFast"
+    ALL_SETTLED = "allSettled"
+
+
+class SagaStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    WAITING = "waiting"
+    COMPENSATING = "compensating"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    ABORTED = "aborted"
+
+
+class TaskOutcome(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    task_id: str
+    status: TaskStatus
+    result: Any = None
+    error: str | None = None
+
+    @property
+    def is_successful(self) -> bool:
+        return self.status == TaskStatus.COMPLETED
+
+    @property
+    def is_terminal(self) -> bool:
+        return self.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.ABORTED)
+
+
+class SagaStepRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    step_name: str
+    status: str = "completed"
+    result_json: str | None = None
+    executed_at: str = Field(default_factory=utc_now_iso)
 

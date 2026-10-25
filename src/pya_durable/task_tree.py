@@ -308,22 +308,39 @@ class TaskRunner:
         if async_task and not async_task.done():
             async_task.cancel()
 
-        conn = await self.storage.get_connection()
-        query = """
-        WITH RECURSIVE descendants(task_id, owner_id, depth) AS (
-            SELECT task_id, owner_id, 0
-            FROM tasks
-            WHERE owner_kind = 'task' AND owner_id = ?
-            UNION ALL
-            SELECT t.task_id, t.owner_id, d.depth + 1
-            FROM tasks t
-            JOIN descendants d ON t.owner_kind = 'task' AND t.owner_id = d.task_id
-        )
-        SELECT task_id FROM descendants ORDER BY depth DESC;
-        """
-        async with conn.execute(query, (task_id,)) as cursor:
-            rows = await cursor.fetchall()
-            descendant_ids = [r[0] for r in rows]
+        if hasattr(self.storage, "get_connection"):
+            conn = await self.storage.get_connection()
+            query = """
+            WITH RECURSIVE descendants(task_id, owner_id, depth) AS (
+                SELECT task_id, owner_id, 0
+                FROM tasks
+                WHERE owner_kind = 'task' AND owner_id = ?
+                UNION ALL
+                SELECT t.task_id, t.owner_id, d.depth + 1
+                FROM tasks t
+                JOIN descendants d ON t.owner_kind = 'task' AND t.owner_id = d.task_id
+            )
+            SELECT task_id FROM descendants ORDER BY depth DESC;
+            """
+            async with conn.execute(query, (task_id,)) as cursor:
+                rows = await cursor.fetchall()
+                descendant_ids = [r[0] for r in rows]
+        else:
+            all_tasks = []
+            for st in TaskStatus:
+                all_tasks.extend(await self.storage.get_tasks_by_status(st))
+            children_map: dict[str, list[str]] = {}
+            for t in all_tasks:
+                if t.owner_kind == "task" and t.owner_id:
+                    children_map.setdefault(t.owner_id, []).append(t.task_id)
+            descendant_ids = []
+
+            def collect(parent: str) -> None:
+                for child in children_map.get(parent, []):
+                    collect(child)
+                    descendant_ids.append(child)
+
+            collect(task_id)
 
         for desc_id in descendant_ids:
             desc_record = await self.storage.get_task(desc_id)
@@ -469,6 +486,48 @@ class TaskRunner:
             owner_id=owner_id,
         )
 
+    async def wait_for_task(
+        self,
+        task_id: str,
+        poll_interval: float = 0.05,
+        timeout: float | None = None,
+    ) -> TaskRecord:
+        import time
+
+        start_time = time.monotonic()
+        while True:
+            record = await self.storage.get_task(task_id)
+            if record is not None and record.status in (
+                TaskStatus.COMPLETED,
+                TaskStatus.FAILED,
+                TaskStatus.ABORTED,
+            ):
+                return record
+            if timeout is not None and (time.monotonic() - start_time) > timeout:
+                raise TimeoutError(f"Timed out waiting for task {task_id}")
+            await asyncio.sleep(poll_interval)
+
+    async def run_saga(
+        self,
+        saga_def: Any,
+        input_data: Any,
+        task_id: str | None = None,
+        owner_kind: str = "root",
+        owner_id: str = "root",
+        conversation_id: str | None = None,
+    ) -> Any:
+        from pya_durable.sagas import SagaCoordinator
+
+        coordinator = SagaCoordinator(self.storage, task_runner=self)
+        return await coordinator.run_saga(
+            saga_def=saga_def,
+            input_data=input_data,
+            task_id=task_id,
+            owner_kind=owner_kind,
+            owner_id=owner_id,
+            conversation_id=conversation_id,
+        )
+
     async def _execute_task_loop(
         self,
         task_def: TaskDefinition,
@@ -555,6 +614,22 @@ class TaskRunner:
                                 checkpoint_json=ctx.checkpoint_json,
                             )
                             return out_val
+
+                    if res.status == TaskStatus.FAILED:
+                        err_msg = str(res.result) if res.result is not None else "Task phase failed"
+                        st_json = json.dumps({"error": err_msg, "state": ctx.state})
+                        await self.storage.update_task_state(
+                            task_id=task_id,
+                            status=TaskStatus.FAILED,
+                            phase="failed",
+                            state_json=st_json,
+                            checkpoint_json=ctx.checkpoint_json,
+                        )
+                        if policy == "failFast":
+                            if owner_kind == "task":
+                                await self.abort_siblings(task_id, owner_id)
+                            await self.abort_children_of(task_id)
+                        return res.result
 
                     if res.status == TaskStatus.ABORTED:
                         await self.abort_task(task_id, reason="phase requested abort")
