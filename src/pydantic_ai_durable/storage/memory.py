@@ -1,5 +1,6 @@
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import Any
 
 from pydantic_ai_durable.models import (
     ApprovalRequestRecord,
@@ -84,9 +85,7 @@ class MemoryStorage(DurableStorage):
     ) -> list[TranscriptEntryRecord]:
         entry_ids = self._transcript_by_conv.get(conversation_id, [])
         return [
-            self._transcript_entries[eid]
-            for eid in entry_ids
-            if eid in self._transcript_entries
+            self._transcript_entries[eid] for eid in entry_ids if eid in self._transcript_entries
         ]
 
     async def get_ancestor_entries(
@@ -135,7 +134,9 @@ class MemoryStorage(DurableStorage):
                 phase=phase,
                 input_json=existing.input_json,
                 state_json=state_json,
-                checkpoint_json=checkpoint_json if checkpoint_json is not None else existing.checkpoint_json,
+                checkpoint_json=checkpoint_json
+                if checkpoint_json is not None
+                else existing.checkpoint_json,
                 policy=existing.policy,
                 created_at=existing.created_at,
                 updated_at=utc_now_iso(),
@@ -435,8 +436,7 @@ class MemoryStorage(DurableStorage):
         conn: Any = None,
     ) -> ApprovalRequestRecord | None:
         matching = [
-            a for a in self._approvals.values()
-            if a.task_id == task_id and a.tool_name == tool_name
+            a for a in self._approvals.values() if a.task_id == task_id and a.tool_name == tool_name
         ]
         if not matching:
             return None
@@ -449,7 +449,8 @@ class MemoryStorage(DurableStorage):
         conn: Any = None,
     ) -> list[ApprovalRequestRecord]:
         results = [
-            appr for appr in self._approvals.values()
+            appr
+            for appr in self._approvals.values()
             if appr.status == ApprovalStatus.PENDING
             and (conversation_id is None or appr.conversation_id == conversation_id)
         ]

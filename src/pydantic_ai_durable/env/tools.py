@@ -3,7 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic_ai_durable.env.local import CommandTimeoutError, ExecutionEnv
-from pydantic_ai_durable.extensions.registry import ExtensionDefinition, define_extension, define_section
+from pydantic_ai_durable.extensions.registry import (
+    ExtensionDefinition,
+    define_extension,
+    define_section,
+)
 from pydantic_ai_durable.tasks.replay import durable_tool, set_tool_partial_output
 
 

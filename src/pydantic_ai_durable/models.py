@@ -231,5 +231,3 @@ def normalize_model_name(model_name: str | None) -> str | None:
     ):
         return "openrouter:openai/gpt-6-luna"
     return model_name
-
-

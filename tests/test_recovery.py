@@ -1,34 +1,33 @@
 import asyncio
 import json
+
 import pytest
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
+from pydantic_ai_durable.recovery import CrashRecoveryManager
+from pydantic_ai_durable.replay import (
+    ConfigurationError,
+    InvalidReplayPolicyError,
+    durable_execution_context,
+    durable_tool,
+    set_tool_partial_output,
+)
 
 from pydantic_ai_durable.harness import DurableHarness
 from pydantic_ai_durable.models import (
     ConversationRecord,
     ReplayPolicy,
-    SubmissionRecord,
-    SubmissionStatus,
     TaskRecord,
     TaskStatus,
     ToolInvocationRecord,
     ToolInvocationStatus,
-)
-from pydantic_ai_durable.recovery import CrashRecoveryManager
-from pydantic_ai_durable.replay import (
-    ConfigurationError,
-    InvalidReplayPolicyError,
-    TOOL_REGISTRY,
-    durable_execution_context,
-    durable_tool,
-    set_tool_partial_output,
 )
 from pydantic_ai_durable.storage import AioSqliteStorage
 
 
 def test_invalid_replay_policy_raises_configuration_error() -> None:
     with pytest.raises(InvalidReplayPolicyError) as exc_info:
+
         @durable_tool(replay="unsupported_policy")
         def sample_tool() -> str:
             return "ok"
@@ -257,7 +256,9 @@ async def test_reconcile_safe_tool_replayed(temp_db: str) -> None:
         )
         await storage.record_tool_started(inv)
 
-        manager = CrashRecoveryManager(storage, tool_registry={"fetch_temperature": fetch_temperature})
+        manager = CrashRecoveryManager(
+            storage, tool_registry={"fetch_temperature": fetch_temperature}
+        )
         report = await manager.reconcile_task(task)
 
         assert report.safe_tools_replayed == 1

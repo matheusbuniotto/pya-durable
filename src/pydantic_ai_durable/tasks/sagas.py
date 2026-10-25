@@ -130,13 +130,9 @@ class SagaContext:
     def abort(self, reason: str = "") -> SagaResult:
         return SagaResult.abort(reason=reason, state=self.state)
 
-    async def outcomes(
-        self, child_task_ids: list[str] | None = None
-    ) -> dict[str, TaskOutcome]:
+    async def outcomes(self, child_task_ids: list[str] | None = None) -> dict[str, TaskOutcome]:
         if self.coordinator is not None:
-            return await self.coordinator.get_outcomes(
-                self.task_id, child_task_ids=child_task_ids
-            )
+            return await self.coordinator.get_outcomes(self.task_id, child_task_ids=child_task_ids)
         return {}
 
 
@@ -161,6 +157,7 @@ def define_saga(
     global_abort: Callable[[SagaContext], Awaitable[None]] | None = None,
 ) -> Any:
     if target is None:
+
         def decorator(cls_or_fn: Any) -> SagaDefinition:
             return _build_saga_def(
                 cls_or_fn,
@@ -171,6 +168,7 @@ def define_saga(
                 compensations=compensations,
                 global_abort=global_abort,
             )
+
         return decorator
 
     return _build_saga_def(
@@ -195,7 +193,9 @@ def _build_saga_def(
 ) -> SagaDefinition:
     saga_name = name or (getattr(target, "__name__", None) or str(target))
     extracted_steps: dict[str, Callable[[SagaContext], Awaitable[SagaResult]]] = dict(steps or {})
-    extracted_compensations: dict[str, Callable[[SagaContext], Awaitable[None]]] = dict(compensations or {})
+    extracted_compensations: dict[str, Callable[[SagaContext], Awaitable[None]]] = dict(
+        compensations or {}
+    )
     extracted_abort = global_abort
 
     if inspect.isclass(target):
@@ -208,10 +208,10 @@ def _build_saga_def(
                 if attr_name in ("abort", "on_abort", "compensate"):
                     extracted_abort = attr
                 elif attr_name.startswith("compensate_"):
-                    step_key = attr_name[len("compensate_"):]
+                    step_key = attr_name[len("compensate_") :]
                     extracted_compensations[step_key] = attr
                 elif attr_name.endswith("_compensate"):
-                    step_key = attr_name[:-len("_compensate")]
+                    step_key = attr_name[: -len("_compensate")]
                     extracted_compensations[step_key] = attr
                 else:
                     extracted_steps[attr_name] = attr
@@ -227,7 +227,9 @@ def _build_saga_def(
 
 
 class SagaCoordinator:
-    def __init__(self, storage: DurableStorage, task_runner: Any = None, stream_hub: Any = None) -> None:
+    def __init__(
+        self, storage: DurableStorage, task_runner: Any = None, stream_hub: Any = None
+    ) -> None:
         self.storage = storage
         self.task_runner = task_runner
         self.stream_hub = stream_hub
@@ -251,7 +253,7 @@ class SagaCoordinator:
                 self.task_runner.register_task(task_def_or_name)
             else:
                 task_type = str(task_def_or_name)
-            
+
             ctx = self.task_runner._build_context_from_record(
                 TaskRecord(
                     task_id=parent_task_id,
@@ -281,7 +283,9 @@ class SagaCoordinator:
             all_tasks: list[TaskRecord] = []
             for st in TaskStatus:
                 all_tasks.extend(await self.storage.get_tasks_by_status(st))
-            children = [t for t in all_tasks if t.owner_kind == "task" and t.owner_id == parent_task_id]
+            children = [
+                t for t in all_tasks if t.owner_kind == "task" and t.owner_id == parent_task_id
+            ]
 
         target_ids = set(child_task_ids) if child_task_ids is not None else None
         outcomes_map: dict[str, TaskOutcome] = {}
@@ -315,9 +319,14 @@ class SagaCoordinator:
         conversation_id: str | None = None,
     ) -> Any:
         self.register_saga(saga_def)
-        effective_task_id = task_id or f"saga-{input_data.get('id', '')}" if isinstance(input_data, dict) and 'id' in input_data else None
+        effective_task_id = (
+            task_id or f"saga-{input_data.get('id', '')}"
+            if isinstance(input_data, dict) and "id" in input_data
+            else None
+        )
         if not effective_task_id:
             import uuid
+
             effective_task_id = f"saga-{uuid.uuid4().hex[:12]}"
 
         existing = await self.storage.get_task(effective_task_id)
@@ -330,7 +339,9 @@ class SagaCoordinator:
                 owner_kind=owner_kind,
                 owner_id=owner_id,
                 phase=saga_def.initial_step,
-                input_json=json.dumps(input_data) if not isinstance(input_data, str) else input_data,
+                input_json=json.dumps(input_data)
+                if not isinstance(input_data, str)
+                else input_data,
                 state_json=json.dumps({"executed_steps": []}),
                 policy=SagaPolicy.FAIL_FAST.value,
             )
@@ -438,35 +449,43 @@ class SagaCoordinator:
 
                     if not wait_result["success"]:
                         await self.compensate_saga(saga_def, ctx, reason=wait_result["error"])
-                        st_json = json.dumps({
-                            "state": ctx.state,
-                            "executed_steps": ctx.executed_steps,
-                            "error": wait_result["error"],
-                        })
+                        st_json = json.dumps(
+                            {
+                                "state": ctx.state,
+                                "executed_steps": ctx.executed_steps,
+                                "error": wait_result["error"],
+                            }
+                        )
                         await self.storage.update_task_state(
                             task_id=task_id,
                             status=TaskStatus.FAILED,
                             phase="failed",
                             state_json=st_json,
                         )
-                        raise SagaExecutionError(f"Saga failed during child execution: {wait_result['error']}")
+                        raise SagaExecutionError(
+                            f"Saga failed during child execution: {wait_result['error']}"
+                        )
 
                     ctx.current_step = res.next_step or "completed"
                     await self.storage.update_task_state(
                         task_id=task_id,
                         status=TaskStatus.RUNNING,
                         phase=ctx.current_step,
-                        state_json=json.dumps({"state": ctx.state, "executed_steps": ctx.executed_steps}),
+                        state_json=json.dumps(
+                            {"state": ctx.state, "executed_steps": ctx.executed_steps}
+                        ),
                     )
                     continue
 
                 if res.action == "complete":
                     ctx.executed_steps.append(ctx.current_step)
-                    st_json = json.dumps({
-                        "output": res.result,
-                        "state": ctx.state,
-                        "executed_steps": ctx.executed_steps,
-                    })
+                    st_json = json.dumps(
+                        {
+                            "output": res.result,
+                            "state": ctx.state,
+                            "executed_steps": ctx.executed_steps,
+                        }
+                    )
                     await self.storage.update_task_state(
                         task_id=task_id,
                         status=TaskStatus.COMPLETED,
@@ -488,13 +507,17 @@ class SagaCoordinator:
 
                 if res.action in ("fail", "abort"):
                     await self.compensate_saga(saga_def, ctx, reason=res.error or "Aborted")
-                    terminal_status = TaskStatus.FAILED if res.action == "fail" else TaskStatus.ABORTED
+                    terminal_status = (
+                        TaskStatus.FAILED if res.action == "fail" else TaskStatus.ABORTED
+                    )
                     terminal_phase = "failed" if res.action == "fail" else "aborted"
-                    st_json = json.dumps({
-                        "state": ctx.state,
-                        "executed_steps": ctx.executed_steps,
-                        "error": res.error,
-                    })
+                    st_json = json.dumps(
+                        {
+                            "state": ctx.state,
+                            "executed_steps": ctx.executed_steps,
+                            "error": res.error,
+                        }
+                    )
                     await self.storage.update_task_state(
                         task_id=task_id,
                         status=terminal_status,
@@ -513,7 +536,9 @@ class SagaCoordinator:
                     task_id=task_id,
                     status=TaskStatus.FAILED,
                     phase="failed",
-                    state_json=json.dumps({"state": ctx.state, "executed_steps": ctx.executed_steps, "error": str(e)}),
+                    state_json=json.dumps(
+                        {"state": ctx.state, "executed_steps": ctx.executed_steps, "error": str(e)}
+                    ),
                 )
                 raise SagaExecutionError(f"Saga execution failed: {e}") from e
 

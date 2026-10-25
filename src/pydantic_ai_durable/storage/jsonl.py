@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-from pydantic_ai_durable.storage.memory import MemoryStorage
 from pydantic_ai_durable.models import (
     ApprovalRequestRecord,
     ApprovalStatus,
@@ -18,6 +17,7 @@ from pydantic_ai_durable.models import (
     ToolInvocationRecord,
     TranscriptEntryRecord,
 )
+from pydantic_ai_durable.storage.memory import MemoryStorage
 
 
 def _append_jsonl_line_sync(file_path: Path, line: str) -> None:
@@ -62,8 +62,13 @@ class JsonlStorage(MemoryStorage):
                             self._transcript_entries[rec_entry.entry_id] = rec_entry
                             if rec_entry.conversation_id not in self._transcript_by_conv:
                                 self._transcript_by_conv[rec_entry.conversation_id] = []
-                            if rec_entry.entry_id not in self._transcript_by_conv[rec_entry.conversation_id]:
-                                self._transcript_by_conv[rec_entry.conversation_id].append(rec_entry.entry_id)
+                            if (
+                                rec_entry.entry_id
+                                not in self._transcript_by_conv[rec_entry.conversation_id]
+                            ):
+                                self._transcript_by_conv[rec_entry.conversation_id].append(
+                                    rec_entry.entry_id
+                                )
                         elif entity == "task":
                             rec_task = TaskRecord.model_validate(data)
                             self._tasks[rec_task.task_id] = rec_task
@@ -324,4 +329,3 @@ class JsonlStorage(MemoryStorage):
                 },
             )
         return res
-

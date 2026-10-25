@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import inspect
 import logging
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Callable, Sequence
+from typing import Any
 
 logger = logging.getLogger("pydantic_ai_durable.extensions.registry")
 
@@ -242,9 +243,7 @@ class ExtensionRegistry:
                                 call_info.args = res.modified_args
                                 current_decision = res
                     except Exception as exc:
-                        logger.exception(
-                            "Hook '%s' failed in before_tool: %s", hook_item.name, exc
-                        )
+                        logger.exception("Hook '%s' failed in before_tool: %s", hook_item.name, exc)
         return current_decision
 
     def run_before_tool_sync(
@@ -289,9 +288,7 @@ class ExtensionRegistry:
                         if res is not None:
                             current_result = res
                     except Exception as exc:
-                        logger.exception(
-                            "Hook '%s' failed in after_tool: %s", hook_item.name, exc
-                        )
+                        logger.exception("Hook '%s' failed in after_tool: %s", hook_item.name, exc)
         return current_result
 
     def run_after_tool_sync(
@@ -348,9 +345,7 @@ class ExtensionRegistry:
                         if res is not None:
                             current_result = res
                     except Exception as exc:
-                        logger.exception(
-                            "Hook '%s' failed in after_model: %s", hook_item.name, exc
-                        )
+                        logger.exception("Hook '%s' failed in after_model: %s", hook_item.name, exc)
         return current_result
 
 

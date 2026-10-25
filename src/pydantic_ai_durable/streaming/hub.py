@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
 import inspect
-from typing import Any, AsyncIterator, Awaitable, Callable, Generic, TypeVar
+from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass, field
+from typing import Any, Generic, TypeVar
 
 from pydantic_ai_durable.models import utc_now_iso
 

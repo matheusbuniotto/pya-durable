@@ -85,7 +85,9 @@ async def test_eval_1_multi_turn_memory(tmp_path: Path) -> None:
         harness = DurableHarness(agent, storage, conversation_id="conv-eval1")
 
         # Turn 1
-        r1 = await harness.run("My project is Aethelgard and deployment target region is SILVER-FOX-99. Acknowledge.")
+        r1 = await harness.run(
+            "My project is Aethelgard and deployment target region is SILVER-FOX-99. Acknowledge."
+        )
         assert r1 is not None
 
         # Turn 2: Query memory
@@ -151,7 +153,9 @@ async def test_eval_2_durable_tool_calling(tmp_path: Path) -> None:
                 state_json="{}",
             )
             await storage.insert_task(task)
-            async with durable_execution_context(storage, task_id="eval2-task", conversation_id="conv-eval2"):
+            async with durable_execution_context(
+                storage, task_id="eval2-task", conversation_id="conv-eval2"
+            ):
                 await compute_hosting_cost(4, 10, "pro")
             invocations = await storage.get_tool_invocations_by_task("eval2-task")
 
@@ -197,7 +201,9 @@ async def test_eval_3_crash_recovery_tool_replay_safety(tmp_path: Path) -> None:
         await storage.insert_task(task)
 
         try:
-            async with durable_execution_context(storage, task_id="task-eval3-crash", conversation_id="conv-eval3"):
+            async with durable_execution_context(
+                storage, task_id="task-eval3-crash", conversation_id="conv-eval3"
+            ):
                 await read_account_balance("ACC-1")
                 await charge_card("ACC-1", 250)
         except SimulatedHostCrash:
@@ -223,7 +229,9 @@ async def test_eval_4_approval_gate_intervention(tmp_path: Path) -> None:
     db_path = str(tmp_path / "eval4.sqlite")
     deleted_buckets: list[str] = []
 
-    @durable_tool(require_approval=True, approval_prompt="Authorize S3 Bucket Deletion", timeout_seconds=120)
+    @durable_tool(
+        require_approval=True, approval_prompt="Authorize S3 Bucket Deletion", timeout_seconds=120
+    )
     async def delete_storage_bucket(bucket_name: str) -> str:
         deleted_buckets.append(bucket_name)
         return f"Bucket '{bucket_name}' has been permanently purged."
@@ -247,7 +255,9 @@ async def test_eval_4_approval_gate_intervention(tmp_path: Path) -> None:
 
         # 1. Gate intercepts execution
         challenge_token: str | None = None
-        async with durable_execution_context(storage, task_id="task-eval4-gate", conversation_id="conv-eval4"):
+        async with durable_execution_context(
+            storage, task_id="task-eval4-gate", conversation_id="conv-eval4"
+        ):
             try:
                 await delete_storage_bucket("production-customer-data-2024")
                 pytest.fail("Should have raised ApprovalRequiredError")
@@ -271,7 +281,9 @@ async def test_eval_4_approval_gate_intervention(tmp_path: Path) -> None:
         assert resolved.status == ApprovalStatus.APPROVED
 
         # 4. Resume tool execution with override
-        async with durable_execution_context(storage, task_id="task-eval4-gate", conversation_id="conv-eval4"):
+        async with durable_execution_context(
+            storage, task_id="task-eval4-gate", conversation_id="conv-eval4"
+        ):
             res = await delete_storage_bucket("production-customer-data-2024")
             assert "staging-scratch-delete-me" in res
 
@@ -282,10 +294,14 @@ async def test_eval_4_approval_gate_intervention(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_eval_5_transcript_forking_branching(tmp_path: Path) -> None:
     db_path = str(tmp_path / "eval5.sqlite")
-    agent_stem, model_name = get_eval_agent(fallback_text="Project Phoenix is our autonomous rover platform.")
+    agent_stem, model_name = get_eval_agent(
+        fallback_text="Project Phoenix is our autonomous rover platform."
+    )
 
     async with AioSqliteStorage(db_path) as storage:
-        conv = DurableConversation(conversation_id="channel-phoenix", storage=storage, agent=agent_stem)
+        conv = DurableConversation(
+            conversation_id="channel-phoenix", storage=storage, agent=agent_stem
+        )
         res_stem = await conv.run("Introduce Project Phoenix in one sentence.")
         assert res_stem is not None
 
@@ -297,8 +313,12 @@ async def test_eval_5_transcript_forking_branching(tmp_path: Path) -> None:
         branch_b = await conv.fork(fork_entry_id=fork_point, new_conversation_id="branch-software")
 
         if "test:" in model_name:
-            branch_a.agent = Agent(TestModel(custom_output_text="Hardware requires titanium chassis."))
-            branch_b.agent = Agent(TestModel(custom_output_text="Software requires ROS2 navigation stack."))
+            branch_a.agent = Agent(
+                TestModel(custom_output_text="Hardware requires titanium chassis.")
+            )
+            branch_b.agent = Agent(
+                TestModel(custom_output_text="Software requires ROS2 navigation stack.")
+            )
         else:
             branch_a.agent = Agent(model_name)
             branch_b.agent = Agent(model_name)
@@ -323,7 +343,9 @@ async def test_eval_6_in_flight_steering(tmp_path: Path) -> None:
 
     async with AioSqliteStorage(db_path) as storage:
         conv = DurableConversation(conversation_id="conv-steer", storage=storage, agent=agent_steer)
-        conv.enqueue_steering("PRIORITY OVERRIDE: Ignore Python files and focus exclusively on Rust.")
+        conv.enqueue_steering(
+            "PRIORITY OVERRIDE: Ignore Python files and focus exclusively on Rust."
+        )
 
         res = await conv.run("Analyze the codebase repositories.")
         assert res is not None
@@ -336,7 +358,9 @@ async def test_eval_6_in_flight_steering(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_eval_7_subagent_worker_delegation(tmp_path: Path) -> None:
     db_path = str(tmp_path / "eval7.sqlite")
-    _agent_base, model_name = get_eval_agent(fallback_text="Code review completed: Potential SQL injection was found in the patch.")
+    _agent_base, model_name = get_eval_agent(
+        fallback_text="Code review completed: Potential SQL injection was found in the patch."
+    )
     is_fallback = "test:" in model_name
 
     @durable_tool(replay="safe")
@@ -346,9 +370,14 @@ async def test_eval_7_subagent_worker_delegation(tmp_path: Path) -> None:
             return "No active context"
 
         sub_agent = (
-            Agent(TestModel(custom_output_text="CRITICAL: Potential SQL injection in WHERE clause."))
+            Agent(
+                TestModel(custom_output_text="CRITICAL: Potential SQL injection in WHERE clause.")
+            )
             if is_fallback
-            else Agent(model_name, system_prompt="You are a strict security reviewer. Identify any vulnerabilities in one sentence.")
+            else Agent(
+                model_name,
+                system_prompt="You are a strict security reviewer. Identify any vulnerabilities in one sentence.",
+            )
         )
         sub_res = await SubagentManager.run_subagent(
             storage=ctx.storage,
@@ -360,7 +389,9 @@ async def test_eval_7_subagent_worker_delegation(tmp_path: Path) -> None:
 
     if is_fallback:
         parent_agent = Agent(
-            TestModel(custom_output_text="Code review completed: Potential SQL injection was found in the patch."),
+            TestModel(
+                custom_output_text="Code review completed: Potential SQL injection was found in the patch."
+            ),
             tools=[request_code_review],
         )
     else:
@@ -414,7 +445,9 @@ async def test_eval_8_durable_document_state(tmp_path: Path) -> None:
 
     if is_fallback:
         doc_agent = Agent(
-            TestModel(custom_output_text="I have updated the active milestone to Beta Release with note: core features stabilized."),
+            TestModel(
+                custom_output_text="I have updated the active milestone to Beta Release with note: core features stabilized."
+            ),
             tools=[update_milestone],
         )
     else:
@@ -426,7 +459,9 @@ async def test_eval_8_durable_document_state(tmp_path: Path) -> None:
 
     async with AioSqliteStorage(db_path) as storage:
         harness = DurableHarness(doc_agent, storage, conversation_id="conv-project-worklog")
-        prompt = "Update the active milestone to 'Beta Release' with note 'core features stabilized'."
+        prompt = (
+            "Update the active milestone to 'Beta Release' with note 'core features stabilized'."
+        )
         res = await harness.run(prompt)
         assert res is not None
 
@@ -464,14 +499,18 @@ async def test_eval_9_durable_saga_reverse_rollback(tmp_path: Path) -> None:
             return "No context"
         coord = SagaCoordinator(ctx.storage)
         try:
-            await coord.run_saga(ClusterProvisioningSaga, {"cluster_name": cluster_name, "nodes": nodes})
+            await coord.run_saga(
+                ClusterProvisioningSaga, {"cluster_name": cluster_name, "nodes": nodes}
+            )
             return f"Cluster '{cluster_name}' successfully provisioned."
         except (SagaExecutionError, RuntimeError) as exc:
             return f"Cluster provisioning failed: {exc}. All allocated resources have been compensated and released."
 
     if is_fallback:
         saga_agent = Agent(
-            TestModel(custom_output_text="Cluster provisioning failed due to storage quota; all reserved nodes have been safely rolled back."),
+            TestModel(
+                custom_output_text="Cluster provisioning failed due to storage quota; all reserved nodes have been safely rolled back."
+            ),
             tools=[provision_cluster],
         )
     else:
@@ -505,4 +544,3 @@ def test_openrouter_gpt_luna_configuration(monkeypatch: pytest.MonkeyPatch) -> N
     agent, model_id = get_eval_agent()
     assert model_id == "openrouter:openai/gpt-6-luna"
     assert getattr(agent.model, "model_name", None) == "openai/gpt-6-luna"
-

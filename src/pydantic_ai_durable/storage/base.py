@@ -1,12 +1,7 @@
-from abc import ABC, abstractmethod
-import asyncio
 import logging
-import os
-from contextlib import asynccontextmanager
-from pathlib import Path
-from typing import Any, AsyncIterator
-
-import aiosqlite
+from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
+from typing import Any
 
 from pydantic_ai_durable.models import (
     ApprovalRequestRecord,
@@ -20,9 +15,7 @@ from pydantic_ai_durable.models import (
     TaskStatus,
     ToolInvocationRecord,
     ToolInvocationStatus,
-    TranscriptEntryKind,
     TranscriptEntryRecord,
-    utc_now_iso,
 )
 
 logger = logging.getLogger("pydantic_ai_durable.storage")
@@ -476,5 +469,3 @@ class DurableStorage(ABC):
 
     async def check_integrity(self) -> bool:
         return True
-
-

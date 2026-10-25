@@ -109,7 +109,13 @@ class SubagentManager:
             task_id=sub_task_id,
             status=TaskStatus.COMPLETED,
             phase="completed",
-            state_json=json.dumps({"output": out_str, "usage": turn_result.token_usage, "conversation_id": conv.conversation_id}),
+            state_json=json.dumps(
+                {
+                    "output": out_str,
+                    "usage": turn_result.token_usage,
+                    "conversation_id": conv.conversation_id,
+                }
+            ),
             checkpoint_json=turn_result.leaf_entry_id,
         )
 
@@ -150,13 +156,18 @@ class SubagentManager:
             for st in (TaskStatus.RUNNING, TaskStatus.PENDING, TaskStatus.WAITING):
                 candidates.extend(await storage.get_tasks_by_status(st))
             matching = [
-                t for t in candidates
+                t
+                for t in candidates
                 if t.owner_id == conversation_id or (conversation_id in t.state_json)
             ]
             if matching:
                 matching.sort(key=lambda t: t.created_at, reverse=True)
                 target = matching[0]
-                target_task_id, input_json, checkpoint_json = target.task_id, target.input_json, target.checkpoint_json
+                target_task_id, input_json, checkpoint_json = (
+                    target.task_id,
+                    target.input_json,
+                    target.checkpoint_json,
+                )
 
         if target_task_id:
             prompt = ""
@@ -192,7 +203,13 @@ class SubagentManager:
                 task_id=target_task_id,
                 status=TaskStatus.COMPLETED,
                 phase="completed",
-                state_json=json.dumps({"output": out_str, "usage": turn_result.token_usage, "conversation_id": conversation_id}),
+                state_json=json.dumps(
+                    {
+                        "output": out_str,
+                        "usage": turn_result.token_usage,
+                        "conversation_id": conversation_id,
+                    }
+                ),
                 checkpoint_json=turn_result.leaf_entry_id,
             )
             return turn_result

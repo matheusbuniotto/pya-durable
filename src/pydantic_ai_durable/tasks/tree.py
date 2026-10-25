@@ -3,8 +3,9 @@ import inspect
 import json
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from pydantic_ai_durable.models import (
     TaskRecord,
@@ -28,9 +29,7 @@ async def check_cycle(
         return
 
     if parent_task_id == task_id:
-        raise CycleDetectedError(
-            f"Cycle detected: task '{task_id}' cannot be its own parent"
-        )
+        raise CycleDetectedError(f"Cycle detected: task '{task_id}' cannot be its own parent")
 
     visited: set[str] = {task_id}
     curr_id: str | None = parent_task_id
@@ -165,6 +164,7 @@ def define_task(
 ) -> Any:
     if target is None:
         if phases is None:
+
             def decorator(cls_or_fn: Any) -> TaskDefinition:
                 return _build_task_def(
                     cls_or_fn,
@@ -175,6 +175,7 @@ def define_task(
                     phases=phases,
                     abort_handler=abort_handler,
                 )
+
             return decorator
 
         return TaskDefinition(

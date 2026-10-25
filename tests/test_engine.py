@@ -160,7 +160,9 @@ async def test_provider_error_marks_task_failed(db_path: str) -> None:
             await harness.run("fail please")
 
         conn = await storage.get_connection()
-        async with conn.execute("SELECT status, state_json FROM tasks WHERE owner_id='conv-err'") as cur:
+        async with conn.execute(
+            "SELECT status, state_json FROM tasks WHERE owner_id='conv-err'"
+        ) as cur:
             row = await cur.fetchone()
             assert row is not None
             assert row[0] == TaskStatus.FAILED.value
@@ -206,7 +208,6 @@ async def test_early_generator_close_records_partial_state(db_path: str) -> None
 
 def test_pydantic_ai_durable_alias() -> None:
     import pydantic_ai_durable
-    import pydantic_ai_durable
 
     assert pydantic_ai_durable.DurableHarness is pydantic_ai_durable.DurableHarness
     assert pydantic_ai_durable.DurableConversation is pydantic_ai_durable.DurableConversation
@@ -215,4 +216,3 @@ def test_pydantic_ai_durable_alias() -> None:
     assert pydantic_ai_durable.MemoryStorage is pydantic_ai_durable.MemoryStorage
     assert pydantic_ai_durable.JsonlStorage is pydantic_ai_durable.JsonlStorage
     assert pydantic_ai_durable.approval_gate is pydantic_ai_durable.approval_gate
-

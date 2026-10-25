@@ -1,24 +1,24 @@
-import asyncio
-from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
-from typing import Any
 
 import pytest
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
-
 from pydantic_ai_durable.approvals import (
-    ApprovalExpiredError,
     ApprovalManager,
     ApprovalRejectedError,
     ApprovalRequiredError,
     InvalidApprovalDecisionError,
-    approval_gate,
 )
-from pydantic_ai_durable.engine import DurableStepEngine
+from pydantic_ai_durable.jsonl_storage import JsonlStorage
+from pydantic_ai_durable.memory_storage import MemoryStorage
+from pydantic_ai_durable.recovery import CrashRecoveryManager
+from pydantic_ai_durable.replay import (
+    durable_execution_context,
+    durable_tool,
+)
+
 from pydantic_ai_durable.extensions import (
-    ExtensionDefinition,
     HookContext,
     HookDecision,
     ToolCallInfo,
@@ -27,32 +27,15 @@ from pydantic_ai_durable.extensions import (
     hook,
 )
 from pydantic_ai_durable.harness import DurableHarness
-from pydantic_ai_durable.jsonl_storage import JsonlStorage
-from pydantic_ai_durable.memory_storage import MemoryStorage
 from pydantic_ai_durable.models import (
     ApprovalDecision,
-    ApprovalRequestRecord,
     ApprovalStatus,
-    ChallengeToken,
     ConversationRecord,
-    ReplayPolicy,
     TaskRecord,
     TaskStatus,
-    ToolInvocationRecord,
     ToolInvocationStatus,
-    utc_now_iso,
-)
-from pydantic_ai_durable.recovery import CrashRecoveryManager
-from pydantic_ai_durable.replay import (
-    durable_execution_context,
-    durable_tool,
 )
 from pydantic_ai_durable.storage import AioSqliteStorage
-from pydantic_ai_durable.streaming import (
-    ApprovalRequestedEvent,
-    ApprovalResolvedEvent,
-    stream_hub,
-)
 
 
 @pytest.fixture(autouse=True)
@@ -509,7 +492,7 @@ async def test_extension_hook_approval_gate(temp_db: str) -> None:
             assert res == "Executed SELECT 1"
 
         # Dangerous query intercepted by hook
-        async with durable_execution_context(storage, "t-hook", "c-hook") as ctx:
+        async with durable_execution_context(storage, "t-hook", "c-hook"):
             with pytest.raises(ApprovalRequiredError) as exc:
                 await execute_query("DROP TABLE users")
             assert "requires human approval" in str(exc.value)

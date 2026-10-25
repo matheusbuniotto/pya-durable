@@ -1,9 +1,8 @@
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, TypeVar
-
-import aiosqlite
+from typing import Any, Generic, TypeVar
 
 from pydantic_ai_durable.models import ConversationRecord, DurableDocRecord, utc_now_iso
 from pydantic_ai_durable.storage.base import DurableStorage
@@ -127,6 +126,7 @@ class DocumentManager:
         await storage.upsert_durable_doc(record, conn=conn)
 
         from pydantic_ai_durable.streaming import StreamEvent, stream_hub
+
         stream_hub.publish(
             conversation_id,
             StreamEvent(
@@ -140,4 +140,3 @@ class DocumentManager:
             ),
         )
         stream_hub.notify_reactive_doc(conversation_id, doc_def.doc_type, doc_id, value)
-

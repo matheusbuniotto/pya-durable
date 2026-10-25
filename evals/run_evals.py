@@ -97,14 +97,18 @@ def get_agent_for_provider(model_name: str | None = None) -> tuple[Agent, str]:
         print(f"[AI Provider] Detected GROQ_API_KEY -> using {model}")
         return Agent(model), model
     else:
-        print("[AI Provider] No live API key found (set OPENROUTER_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY).")
-        print("[AI Provider] Running with High-Fidelity TestModel fallback to verify all behavioral harnesses.")
+        print(
+            "[AI Provider] No live API key found (set OPENROUTER_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY)."
+        )
+        print(
+            "[AI Provider] Running with High-Fidelity TestModel fallback to verify all behavioral harnesses."
+        )
         fallback_model = TestModel()
         return Agent(fallback_model), "test:high-fidelity-fallback"
 
 
 def print_eval_header(num: int, title: str) -> None:
-    print(f"\n{'='*75}\nEVAL {num}: {title}\n{'='*75}")
+    print(f"\n{'=' * 75}\nEVAL {num}: {title}\n{'=' * 75}")
 
 
 async def eval_1_multi_turn_memory(agent: Agent, model_name: str, temp_dir: str) -> bool:
@@ -113,13 +117,17 @@ async def eval_1_multi_turn_memory(agent: Agent, model_name: str, temp_dir: str)
 
     is_fallback = "test:" in model_name
     if is_fallback:
-        agent.model = TestModel(custom_output_text="Your project is Aethelgard and deployment target region is SILVER-FOX-99.")
+        agent.model = TestModel(
+            custom_output_text="Your project is Aethelgard and deployment target region is SILVER-FOX-99."
+        )
 
     async with AioSqliteStorage(db_path) as storage:
         harness = DurableHarness(agent, storage, conversation_id="conv-eval1")
 
         # Turn 1: Seed conversational memory
-        prompt_1 = "My project is Aethelgard and deployment target region is SILVER-FOX-99. Acknowledge."
+        prompt_1 = (
+            "My project is Aethelgard and deployment target region is SILVER-FOX-99. Acknowledge."
+        )
         print(f"-> User Turn 1: '{prompt_1}'")
         r1 = await harness.run(prompt_1)
         print(f"<- Model Turn 1: {r1.output}")
@@ -157,7 +165,10 @@ async def eval_2_durable_tool_calling(agent: Agent, model_name: str, temp_dir: s
 
     is_fallback = "test:" in model_name
     if is_fallback:
-        agent = Agent(TestModel(custom_output_text="The total cost for 4 pro servers for 10 hours is $8.00."), tools=[compute_hosting_cost])
+        agent = Agent(
+            TestModel(custom_output_text="The total cost for 4 pro servers for 10 hours is $8.00."),
+            tools=[compute_hosting_cost],
+        )
     else:
         agent = Agent(model_name, tools=[compute_hosting_cost])
 
@@ -183,7 +194,9 @@ async def eval_2_durable_tool_calling(agent: Agent, model_name: str, temp_dir: s
                 state_json="{}",
             )
             await storage.insert_task(task)
-            async with durable_execution_context(storage, task_id="eval2-task", conversation_id="conv-eval2"):
+            async with durable_execution_context(
+                storage, task_id="eval2-task", conversation_id="conv-eval2"
+            ):
                 await compute_hosting_cost(4, 10, "pro")
             invocations = await storage.get_tool_invocations_by_task("eval2-task")
 
@@ -239,7 +252,9 @@ async def eval_3_crash_recovery_tool_replay(agent: Agent, model_name: str, temp_
         await storage.insert_task(task)
 
         try:
-            async with durable_execution_context(storage, task_id="task-eval3-crash", conversation_id="conv-eval3"):
+            async with durable_execution_context(
+                storage, task_id="task-eval3-crash", conversation_id="conv-eval3"
+            ):
                 await read_account_balance("ACC-1")
                 await charge_card("ACC-1", 250)
         except SimulatedHostCrash:
@@ -272,7 +287,9 @@ async def eval_4_approval_gate_intervention(agent: Agent, model_name: str, temp_
 
     deleted_buckets: list[str] = []
 
-    @durable_tool(require_approval=True, approval_prompt="Authorize S3 Bucket Deletion", timeout_seconds=120)
+    @durable_tool(
+        require_approval=True, approval_prompt="Authorize S3 Bucket Deletion", timeout_seconds=120
+    )
     async def delete_storage_bucket(bucket_name: str) -> str:
         deleted_buckets.append(bucket_name)
         return f"Bucket '{bucket_name}' has been permanently purged."
@@ -297,7 +314,9 @@ async def eval_4_approval_gate_intervention(agent: Agent, model_name: str, temp_
 
         # 1. Agent attempts destructive action
         print("-> Agent executes delete_storage_bucket('production-customer-data-2024')")
-        async with durable_execution_context(storage, task_id="task-eval4-gate", conversation_id="conv-eval4"):
+        async with durable_execution_context(
+            storage, task_id="task-eval4-gate", conversation_id="conv-eval4"
+        ):
             try:
                 await delete_storage_bucket("production-customer-data-2024")
                 raise AssertionError("Should have raised ApprovalRequiredError!")
@@ -308,7 +327,9 @@ async def eval_4_approval_gate_intervention(agent: Agent, model_name: str, temp_
         # 2. Operator reviews pending list
         pending = await approver.list_pending("conv-eval4")
         assert len(pending) == 1
-        print(f"-> Operator reviews challenge: {pending[0].challenge_token} ({pending[0].prompt_message})")
+        print(
+            f"-> Operator reviews challenge: {pending[0].challenge_token} ({pending[0].prompt_message})"
+        )
         print(f"-> Proposed args: {pending[0].args_json}")
 
         # 3. Operator overrides argument to safe scratch bucket
@@ -322,7 +343,9 @@ async def eval_4_approval_gate_intervention(agent: Agent, model_name: str, temp_
         assert resolved.status == ApprovalStatus.APPROVED
 
         # 4. Resume tool execution with override
-        async with durable_execution_context(storage, task_id="task-eval4-gate", conversation_id="conv-eval4"):
+        async with durable_execution_context(
+            storage, task_id="task-eval4-gate", conversation_id="conv-eval4"
+        ):
             res = await delete_storage_bucket("production-customer-data-2024")
             print(f"<- Resumed Tool Execution: {res}")
 
@@ -340,8 +363,14 @@ async def eval_5_transcript_forking_branching(agent: Agent, model_name: str, tem
     is_fallback = "test:" in model_name
 
     async with AioSqliteStorage(db_path) as storage:
-        agent_stem = Agent(TestModel(custom_output_text="Project Phoenix is our autonomous rover platform.")) if is_fallback else Agent(model_name)
-        conv = DurableConversation(conversation_id="channel-phoenix", storage=storage, agent=agent_stem)
+        agent_stem = (
+            Agent(TestModel(custom_output_text="Project Phoenix is our autonomous rover platform."))
+            if is_fallback
+            else Agent(model_name)
+        )
+        conv = DurableConversation(
+            conversation_id="channel-phoenix", storage=storage, agent=agent_stem
+        )
 
         print("-> Stem Prompt: 'Introduce Project Phoenix in one sentence.'")
         res_stem = await conv.run("Introduce Project Phoenix in one sentence.")
@@ -356,8 +385,16 @@ async def eval_5_transcript_forking_branching(agent: Agent, model_name: str, tem
         branch_b = await conv.fork(fork_entry_id=fork_point, new_conversation_id="branch-software")
 
         if is_fallback:
-            branch_a.agent = Agent(TestModel(custom_output_text="Hardware requires titanium chassis and brushless motors."))
-            branch_b.agent = Agent(TestModel(custom_output_text="Software requires ROS2 navigation stack and SLAM algorithms."))
+            branch_a.agent = Agent(
+                TestModel(
+                    custom_output_text="Hardware requires titanium chassis and brushless motors."
+                )
+            )
+            branch_b.agent = Agent(
+                TestModel(
+                    custom_output_text="Software requires ROS2 navigation stack and SLAM algorithms."
+                )
+            )
         else:
             branch_a.agent = Agent(model_name)
             branch_b.agent = Agent(model_name)
@@ -374,7 +411,9 @@ async def eval_5_transcript_forking_branching(agent: Agent, model_name: str, tem
         hist_a = await branch_a.get_history()
         hist_b = await branch_b.get_history()
 
-        print(f"-> History check: Branch A has {len(hist_a)} entries; Branch B has {len(hist_b)} entries")
+        print(
+            f"-> History check: Branch A has {len(hist_a)} entries; Branch B has {len(hist_b)} entries"
+        )
         assert len(hist_a) >= 3
         assert len(hist_b) >= 3
         assert out_a.output != out_b.output
@@ -389,18 +428,28 @@ async def eval_6_in_flight_steering(agent: Agent, model_name: str, temp_dir: str
     is_fallback = "test:" in model_name
 
     async with AioSqliteStorage(db_path) as storage:
-        agent_steer = Agent(TestModel(custom_output_text="Redirect acknowledged. Focusing on Rust only.")) if is_fallback else Agent(model_name)
+        agent_steer = (
+            Agent(TestModel(custom_output_text="Redirect acknowledged. Focusing on Rust only."))
+            if is_fallback
+            else Agent(model_name)
+        )
         conv = DurableConversation(conversation_id="conv-steer", storage=storage, agent=agent_steer)
 
         # Queue steering prompt before turn completes
-        conv.enqueue_steering("PRIORITY OVERRIDE: Ignore Python files and focus exclusively on Rust.")
+        conv.enqueue_steering(
+            "PRIORITY OVERRIDE: Ignore Python files and focus exclusively on Rust."
+        )
         print("-> Enqueued Steering Directive: 'PRIORITY OVERRIDE: Focus exclusively on Rust.'")
 
         res = await conv.run("Analyze the codebase repositories.")
         print(f"<- Model Response Incorporating Steering: {res.output}")
 
         transcript = await storage.get_conversation_transcript("conv-steer")
-        steer_entries = [e for e in transcript if e.kind.value == "steer_injected" or "PRIORITY OVERRIDE" in e.message_json]
+        steer_entries = [
+            e
+            for e in transcript
+            if e.kind.value == "steer_injected" or "PRIORITY OVERRIDE" in e.message_json
+        ]
         print(f"-> Steering recorded in durable storage: {len(steer_entries) > 0}")
         assert "Rust" in res.output or len(steer_entries) > 0
         return True
@@ -419,9 +468,14 @@ async def eval_7_subagent_worker_delegation(agent: Agent, model_name: str, temp_
             return "No active context"
 
         sub_agent = (
-            Agent(TestModel(custom_output_text="CRITICAL: Potential SQL injection in WHERE clause."))
+            Agent(
+                TestModel(custom_output_text="CRITICAL: Potential SQL injection in WHERE clause.")
+            )
             if is_fallback
-            else Agent(model_name, system_prompt="You are a strict security reviewer. Identify any vulnerabilities in one sentence.")
+            else Agent(
+                model_name,
+                system_prompt="You are a strict security reviewer. Identify any vulnerabilities in one sentence.",
+            )
         )
         print("   [Subagent] Spawning specialized child review subagent...")
         sub_res = await SubagentManager.run_subagent(
@@ -435,7 +489,9 @@ async def eval_7_subagent_worker_delegation(agent: Agent, model_name: str, temp_
 
     if is_fallback:
         parent_agent = Agent(
-            TestModel(custom_output_text="Code review completed: Potential SQL injection was found in the patch."),
+            TestModel(
+                custom_output_text="Code review completed: Potential SQL injection was found in the patch."
+            ),
             tools=[request_code_review],
         )
     else:
@@ -470,7 +526,9 @@ async def eval_7_subagent_worker_delegation(agent: Agent, model_name: str, temp_
 
 
 async def eval_8_durable_document_state(agent: Agent, model_name: str, temp_dir: str) -> bool:
-    print_eval_header(8, "Durable Documents & Atomic State Mutation (pi-durable durable-document-extension.ts)")
+    print_eval_header(
+        8, "Durable Documents & Atomic State Mutation (pi-durable durable-document-extension.ts)"
+    )
     db_path = os.path.join(temp_dir, "eval8.sqlite")
 
     is_fallback = "test:" in model_name
@@ -494,7 +552,9 @@ async def eval_8_durable_document_state(agent: Agent, model_name: str, temp_dir:
 
     if is_fallback:
         doc_agent = Agent(
-            TestModel(custom_output_text="I have updated the active milestone to Beta Release with note: core features stabilized."),
+            TestModel(
+                custom_output_text="I have updated the active milestone to Beta Release with note: core features stabilized."
+            ),
             tools=[update_milestone],
         )
     else:
@@ -507,20 +567,28 @@ async def eval_8_durable_document_state(agent: Agent, model_name: str, temp_dir:
     async with AioSqliteStorage(db_path) as storage:
         harness = DurableHarness(doc_agent, storage, conversation_id="conv-project-worklog")
 
-        prompt = "Update the active milestone to 'Beta Release' with note 'core features stabilized'."
+        prompt = (
+            "Update the active milestone to 'Beta Release' with note 'core features stabilized'."
+        )
         print(f"-> User Prompt: '{prompt}'")
         res = await harness.run(prompt)
         print(f"<- Release Manager Response: {res.output}")
 
         stored_doc = await harness.get_doc(work_log_def)
-        print(f"-> Stored Durable Document in SQLite: milestone='{stored_doc.current_milestone}', entries={stored_doc.entries}")
+        print(
+            f"-> Stored Durable Document in SQLite: milestone='{stored_doc.current_milestone}', entries={stored_doc.entries}"
+        )
         assert stored_doc.current_milestone != "Planning" or len(stored_doc.entries) > 0
         print("-> Atomic Document Mutation: PASSED")
         return True
 
 
-async def eval_9_durable_saga_reverse_rollback(agent: Agent, model_name: str, temp_dir: str) -> bool:
-    print_eval_header(9, "Durable Task Saga with Reverse Compensation (pi-durable durable-task-saga.ts)")
+async def eval_9_durable_saga_reverse_rollback(
+    agent: Agent, model_name: str, temp_dir: str
+) -> bool:
+    print_eval_header(
+        9, "Durable Task Saga with Reverse Compensation (pi-durable durable-task-saga.ts)"
+    )
     db_path = os.path.join(temp_dir, "eval9.sqlite")
 
     audit_trail: list[str] = []
@@ -549,14 +617,18 @@ async def eval_9_durable_saga_reverse_rollback(agent: Agent, model_name: str, te
             return "No context"
         coord = SagaCoordinator(ctx.storage)
         try:
-            await coord.run_saga(ClusterProvisioningSaga, {"cluster_name": cluster_name, "nodes": nodes})
+            await coord.run_saga(
+                ClusterProvisioningSaga, {"cluster_name": cluster_name, "nodes": nodes}
+            )
             return f"Cluster '{cluster_name}' successfully provisioned."
         except (SagaExecutionError, RuntimeError) as exc:
             return f"Cluster provisioning failed: {exc}. All allocated resources have been compensated and released."
 
     if is_fallback:
         saga_agent = Agent(
-            TestModel(custom_output_text="Cluster provisioning failed due to storage quota; all reserved nodes have been safely rolled back."),
+            TestModel(
+                custom_output_text="Cluster provisioning failed due to storage quota; all reserved nodes have been safely rolled back."
+            ),
             tools=[provision_cluster],
         )
     else:
@@ -583,8 +655,15 @@ async def eval_9_durable_saga_reverse_rollback(agent: Agent, model_name: str, te
 
 
 async def main() -> None:
-    parser = argparse.ArgumentParser(description="Run pydantic-ai-durable evaluation suite with real AI provider.")
-    parser.add_argument("--model", type=str, default=None, help="LLM model identifier (e.g. openrouter:openai/gpt-6-luna, openai:gpt-4o-mini)")
+    parser = argparse.ArgumentParser(
+        description="Run pydantic-ai-durable evaluation suite with real AI provider."
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help="LLM model identifier (e.g. openrouter:openai/gpt-6-luna, openai:gpt-4o-mini)",
+    )
     args = parser.parse_args()
 
     agent, model_name = get_agent_for_provider(args.model)

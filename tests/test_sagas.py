@@ -3,15 +3,8 @@ import json
 from pathlib import Path
 
 import pytest
-
 from pydantic_ai_durable.jsonl_storage import JsonlStorage
 from pydantic_ai_durable.memory_storage import MemoryStorage
-from pydantic_ai_durable.models import (
-    ConversationRecord,
-    SagaPolicy,
-    TaskRecord,
-    TaskStatus,
-)
 from pydantic_ai_durable.recovery import CrashRecoveryManager
 from pydantic_ai_durable.replay import (
     create_durable_task,
@@ -26,9 +19,16 @@ from pydantic_ai_durable.sagas import (
     SagaResult,
     define_saga,
 )
+from pydantic_ai_durable.task_tree import TaskPhaseResult, TaskRunner, define_task
+
+from pydantic_ai_durable.models import (
+    ConversationRecord,
+    SagaPolicy,
+    TaskRecord,
+    TaskStatus,
+)
 from pydantic_ai_durable.storage import AioSqliteStorage
 from pydantic_ai_durable.streaming import stream_hub
-from pydantic_ai_durable.task_tree import TaskPhaseResult, TaskRunner, define_task
 
 
 @pytest.mark.asyncio
@@ -130,9 +130,27 @@ async def test_fail_fast_compensation_cascade(temp_db: str) -> None:
                 ctx.state["reserved"] = True
                 c1 = await ctx.spawn(success_worker, {})
                 c2 = await ctx.spawn(failing_worker, {})
-                asyncio.create_task(runner.run_task(success_worker, {}, task_id=c1.task_id, owner_kind="task", owner_id=ctx.task_id))
-                asyncio.create_task(runner.run_task(failing_worker, {}, task_id=c2.task_id, owner_kind="task", owner_id=ctx.task_id))
-                return ctx.wait_on([c1.task_id, c2.task_id], next_step="finalize", policy=SagaPolicy.FAIL_FAST)
+                asyncio.create_task(
+                    runner.run_task(
+                        success_worker,
+                        {},
+                        task_id=c1.task_id,
+                        owner_kind="task",
+                        owner_id=ctx.task_id,
+                    )
+                )
+                asyncio.create_task(
+                    runner.run_task(
+                        failing_worker,
+                        {},
+                        task_id=c2.task_id,
+                        owner_kind="task",
+                        owner_id=ctx.task_id,
+                    )
+                )
+                return ctx.wait_on(
+                    [c1.task_id, c2.task_id], next_step="finalize", policy=SagaPolicy.FAIL_FAST
+                )
 
             async def compensate_step_reserve(self, ctx: SagaContext) -> None:
                 compensations_run.append("step_reserve")
@@ -172,9 +190,19 @@ async def test_all_settled_policy_collects_mixed_outcomes(temp_db: str) -> None:
             async def launch(self, ctx: SagaContext) -> SagaResult:
                 g = await ctx.spawn(good_worker, {})
                 b = await ctx.spawn(bad_worker, {})
-                asyncio.create_task(runner.run_task(good_worker, {}, task_id=g.task_id, owner_kind="task", owner_id=ctx.task_id))
-                asyncio.create_task(runner.run_task(bad_worker, {}, task_id=b.task_id, owner_kind="task", owner_id=ctx.task_id))
-                return ctx.wait_on([g.task_id, b.task_id], next_step="review", policy=SagaPolicy.ALL_SETTLED)
+                asyncio.create_task(
+                    runner.run_task(
+                        good_worker, {}, task_id=g.task_id, owner_kind="task", owner_id=ctx.task_id
+                    )
+                )
+                asyncio.create_task(
+                    runner.run_task(
+                        bad_worker, {}, task_id=b.task_id, owner_kind="task", owner_id=ctx.task_id
+                    )
+                )
+                return ctx.wait_on(
+                    [g.task_id, b.task_id], next_step="review", policy=SagaPolicy.ALL_SETTLED
+                )
 
             async def review(self, ctx: SagaContext) -> SagaResult:
                 outcomes = await ctx.outcomes()
@@ -203,12 +231,14 @@ async def test_crash_recovery_for_waiting_saga(temp_db: str) -> None:
             phase="waiting_tasks",
             input_json="{}",
             state_json=json.dumps({"state": {"cluster": "prod"}, "executed_steps": ["step_one"]}),
-            checkpoint_json=json.dumps({
-                "waiting_on": [child1_id, child2_id],
-                "next_step": "finalize",
-                "policy": "failFast",
-                "executed_steps": ["step_one"],
-            }),
+            checkpoint_json=json.dumps(
+                {
+                    "waiting_on": [child1_id, child2_id],
+                    "next_step": "finalize",
+                    "policy": "failFast",
+                    "executed_steps": ["step_one"],
+                }
+            ),
         )
         c1 = TaskRecord(
             task_id=child1_id,
@@ -282,7 +312,9 @@ async def test_durable_tool_spawning_and_awaiting_tasks(temp_db: str) -> None:
             await storage.insert_conversation(conv)
             await storage.insert_task(parent_task)
 
-            async with durable_execution_context(storage, task_id="tool-parent-task", conversation_id="conv-1"):
+            async with durable_execution_context(
+                storage, task_id="tool-parent-task", conversation_id="conv-1"
+            ):
                 res = await orchestrate_tool(100)
                 assert res == 42
 

@@ -1,18 +1,18 @@
 import json
-from pathlib import Path
 import tempfile
+from pathlib import Path
 from typing import Any
 
 import pytest
 from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
-
 from pydantic_ai_durable.docs import DocumentManager, define_doc
-from pydantic_ai_durable.harness import DurableHarness
 from pydantic_ai_durable.jsonl_storage import JsonlStorage
 from pydantic_ai_durable.memo import MemoManager
 from pydantic_ai_durable.memory_storage import MemoryStorage
+
+from pydantic_ai_durable.harness import DurableHarness
 from pydantic_ai_durable.models import (
     ConversationRecord,
     DurableDocRecord,
@@ -112,7 +112,9 @@ async def test_memory_storage_tasks_and_status_filtering() -> None:
     assert len(running) == 1
     assert running[0].task_id == "t1"
 
-    await storage.update_task_state("t1", phase="phase_done", state_json='{"done": true}', status=TaskStatus.COMPLETED)
+    await storage.update_task_state(
+        "t1", phase="phase_done", state_json='{"done": true}', status=TaskStatus.COMPLETED
+    )
     t1_updated = await storage.get_task("t1")
     assert t1_updated is not None
     assert t1_updated.status == TaskStatus.COMPLETED

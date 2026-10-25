@@ -2,13 +2,12 @@ import asyncio
 import json
 import logging
 import subprocess
-import tempfile
 from pathlib import Path
-from typing import Any
 
 import pytest
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.test import TestModel
+from pydantic_ai_durable.worktrees import GitWorktreeManager
 
 from pydantic_ai_durable.branching import (
     DurableConversation,
@@ -23,7 +22,6 @@ from pydantic_ai_durable.models import (
 )
 from pydantic_ai_durable.steering import SteeringQueue, global_steering_queue
 from pydantic_ai_durable.storage import AioSqliteStorage
-from pydantic_ai_durable.worktrees import GitWorktreeManager
 
 
 @pytest.mark.asyncio
@@ -162,10 +160,14 @@ async def test_nested_branch_traversal(tmp_path: Path) -> None:
         harness_a = DurableHarness(agent, storage, conversation_id="conv-a")
         res_a = await harness_a.run("prompt a")
 
-        harness_b = await harness_a.fork(fork_entry_id=res_a.leaf_entry_id, new_conversation_id="conv-b")
+        harness_b = await harness_a.fork(
+            fork_entry_id=res_a.leaf_entry_id, new_conversation_id="conv-b"
+        )
         res_b = await harness_b.run("prompt b")
 
-        harness_c = await harness_b.fork(fork_entry_id=res_b.leaf_entry_id, new_conversation_id="conv-c")
+        harness_c = await harness_b.fork(
+            fork_entry_id=res_b.leaf_entry_id, new_conversation_id="conv-c"
+        )
         res_c = await harness_c.run("prompt c")
 
         transcript_c = await harness_c.get_transcript()
@@ -195,7 +197,9 @@ def test_steer_queue_fifo_buffer() -> None:
 
 
 @pytest.mark.asyncio
-async def test_mid_run_steer_injection_multi_step_tool(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+async def test_mid_run_steer_injection_multi_step_tool(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     caplog.set_level(logging.INFO)
     db_file = tmp_path / "test_steer.db"
     async with AioSqliteStorage(db_file) as storage:
@@ -215,7 +219,10 @@ async def test_mid_run_steer_injection_multi_step_tool(tmp_path: Path, caplog: p
         res = await harness.run("trigger slow tool")
 
         assert res is not None
-        assert "Injected steer message into active turn for conversation id conv-steer-lane" in caplog.text
+        assert (
+            "Injected steer message into active turn for conversation id conv-steer-lane"
+            in caplog.text
+        )
 
 
 @pytest.mark.asyncio
@@ -236,7 +243,9 @@ def test_git_worktree_creation(tmp_path: Path) -> None:
     repo_dir = tmp_path / "main_repo"
     repo_dir.mkdir()
     subprocess.run(["git", "init"], cwd=str(repo_dir), check=True, capture_output=True)
-    subprocess.run(["git", "config", "user.email", "test@test.local"], cwd=str(repo_dir), check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.local"], cwd=str(repo_dir), check=True
+    )
     subprocess.run(["git", "config", "user.name", "Test User"], cwd=str(repo_dir), check=True)
 
     dummy_file = repo_dir / "README.md"
@@ -263,7 +272,9 @@ def test_git_worktree_cleanup(tmp_path: Path) -> None:
     repo_dir = tmp_path / "main_repo"
     repo_dir.mkdir()
     subprocess.run(["git", "init"], cwd=str(repo_dir), check=True, capture_output=True)
-    subprocess.run(["git", "config", "user.email", "test@test.local"], cwd=str(repo_dir), check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.local"], cwd=str(repo_dir), check=True
+    )
     subprocess.run(["git", "config", "user.name", "Test User"], cwd=str(repo_dir), check=True)
 
     dummy_file = repo_dir / "README.md"

@@ -1,0 +1,53 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  quality:
+    name: Lint, format & complexity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv run --with ruff ruff check . --output-format github
+      - run: uv run --with ruff ruff format --check .
+  test:
+    name: Tests (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv run --python ${{ matrix.python }} --extra dev --with pytest-cov pytest --cov=src --cov-report=term-missing --cov-fail-under=70
+  security:
+    name: Dependency & code security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Audit dependencies
+        run: uv export --no-hashes --no-emit-project -o requirements.txt -q && uvx pip-audit -r requirements.txt --no-deps --disable-pip
+      - name: Bandit
+        run: uvx bandit -r src -c pyproject.toml -ll
+  build:
+    name: Build & install check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv build
+      - run: uvx twine check dist/*
+      - run: uv venv /tmp/v && uv pip install -p /tmp/v dist/*.whl && /tmp/v/bin/python -c "import pydantic_ai_durable, pya_durable"

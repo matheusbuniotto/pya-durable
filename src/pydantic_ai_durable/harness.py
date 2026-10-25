@@ -16,18 +16,17 @@ import aiosqlite
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 
-from pydantic_ai_durable.tasks.approvals import ApprovalManager, ApprovalRequestRecord
 from pydantic_ai_durable.branching import DurableConversation, InvalidForkEntryError
+from pydantic_ai_durable.engine import DurableStepEngine, TurnResult
 from pydantic_ai_durable.extensions.compaction import BackgroundCompactor
 from pydantic_ai_durable.extensions.docs import DocDefinition, DocumentManager
-from pydantic_ai_durable.engine import DurableStepEngine, TurnResult
+from pydantic_ai_durable.extensions.memo import MemoManager
 from pydantic_ai_durable.extensions.registry import (
     ExtensionDefinition,
     ExtensionRegistry,
     SectionContext,
     global_extension_registry,
 )
-from pydantic_ai_durable.extensions.memo import MemoManager
 from pydantic_ai_durable.models import (
     ConversationRecord,
     SubmissionRecord,
@@ -37,8 +36,11 @@ from pydantic_ai_durable.models import (
     TranscriptEntryKind,
     TranscriptEntryRecord,
 )
-from pydantic_ai_durable.providers.registry import ModelsRegistry, global_models_registry, resolve_agent
-from pydantic_ai_durable.tasks.recovery import CrashRecoveryManager
+from pydantic_ai_durable.providers.registry import (
+    ModelsRegistry,
+    global_models_registry,
+    resolve_agent,
+)
 from pydantic_ai_durable.steering import global_steering_queue
 from pydantic_ai_durable.storage.base import DurableStorage
 from pydantic_ai_durable.streaming.hub import (
@@ -50,6 +52,8 @@ from pydantic_ai_durable.streaming.hub import (
     multiplayer_hub,
     stream_hub,
 )
+from pydantic_ai_durable.tasks.approvals import ApprovalManager, ApprovalRequestRecord
+from pydantic_ai_durable.tasks.recovery import CrashRecoveryManager
 
 if TYPE_CHECKING:
     from pydantic_ai_durable.env import ExecutionEnv
@@ -125,7 +129,6 @@ class DurableHarness(Generic[TOutput]):
         await harness._ensure_conversation()
         return harness
 
-
     def get_conversation_env(
         self,
         conversation_id: str | None = None,
@@ -139,6 +142,7 @@ class DurableHarness(Generic[TOutput]):
                 return self._env_factory(target_id, cwd)
             return self._env_factory
         from pydantic_ai_durable.env import LocalExecutionEnv
+
         return LocalExecutionEnv(cwd=cwd or Path.cwd())
 
     @property
@@ -180,7 +184,9 @@ class DurableHarness(Generic[TOutput]):
                 target_cwd = options_or_agent["cwd"]
             if "env" in options_or_agent and target_env is None:
                 target_env = options_or_agent["env"]
-            if target_agent is None and ("model" in options_or_agent or "provider" in options_or_agent):
+            if target_agent is None and (
+                "model" in options_or_agent or "provider" in options_or_agent
+            ):
                 target_agent = options_or_agent
         elif options_or_agent is not None and target_agent is None:
             target_agent = options_or_agent
@@ -217,9 +223,7 @@ class DurableHarness(Generic[TOutput]):
         env: ExecutionEnv | None = None,
     ) -> DurableConversation:
         resolved_agent = (
-            resolve_agent(agent, models=self.models)
-            if agent is not None
-            else self.agent
+            resolve_agent(agent, models=self.models) if agent is not None else self.agent
         )
         conv_env = env or self.get_conversation_env(conversation_id, cwd=cwd)
 
@@ -334,12 +338,14 @@ class DurableHarness(Generic[TOutput]):
                 msg = json.loads(e.message_json)
             except Exception:
                 msg = e.message_json
-            formatted_entries.append({
-                "entry_id": e.entry_id,
-                "kind": e.kind.value,
-                "created_at": e.created_at,
-                "message": msg,
-            })
+            formatted_entries.append(
+                {
+                    "entry_id": e.entry_id,
+                    "kind": e.kind.value,
+                    "created_at": e.created_at,
+                    "message": msg,
+                }
+            )
 
         doc_records = await self.storage.list_durable_docs(self.conversation_id)
         docs_dict: dict[str, Any] = {}
@@ -392,12 +398,14 @@ class DurableHarness(Generic[TOutput]):
                 msg = json.loads(e.message_json)
             except Exception:
                 msg = e.message_json
-            formatted_entries.append({
-                "entry_id": e.entry_id,
-                "kind": e.kind.value,
-                "created_at": e.created_at,
-                "message": msg,
-            })
+            formatted_entries.append(
+                {
+                    "entry_id": e.entry_id,
+                    "kind": e.kind.value,
+                    "created_at": e.created_at,
+                    "message": msg,
+                }
+            )
 
         doc_records = await self.storage.list_durable_docs(self.conversation_id)
         docs_dict: dict[str, Any] = {}
@@ -437,7 +445,6 @@ class DurableHarness(Generic[TOutput]):
                 version=rv.value.version + 1,
             )
             rv.notify(new_state)
-
 
     async def run(
         self,
@@ -559,9 +566,13 @@ class DurableHarness(Generic[TOutput]):
                 )
             await self.refresh_view_states()
 
-            if not turn_result.waiting_approval and self.auto_compact and BackgroundCompactor.should_compact(
-                turn_result.token_usage.get("total_tokens", 0),
-                threshold=self.compaction_threshold,
+            if (
+                not turn_result.waiting_approval
+                and self.auto_compact
+                and BackgroundCompactor.should_compact(
+                    turn_result.token_usage.get("total_tokens", 0),
+                    threshold=self.compaction_threshold,
+                )
             ):
                 await BackgroundCompactor.compact_conversation(
                     self.storage,
@@ -741,11 +752,7 @@ class DurableHarness(Generic[TOutput]):
                 raise InvalidForkEntryError(f"Fork entry {target_fork_id} not found")
 
         child_conv_id = new_conversation_id or f"conv-{uuid.uuid4().hex[:12]}"
-        child_agent = (
-            resolve_agent(agent, models=self.models)
-            if agent is not None
-            else self.agent
-        )
+        child_agent = resolve_agent(agent, models=self.models) if agent is not None else self.agent
 
         record = ConversationRecord(
             conversation_id=child_conv_id,

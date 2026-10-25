@@ -1,36 +1,32 @@
 import asyncio
 import json
 import logging
-import tempfile
 import time
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import pytest
 from pydantic import BaseModel
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
-
 from pydantic_ai_durable.compaction import (
     BackgroundCompactor,
     create_handoff_tool,
     create_search_history_tool,
 )
 from pydantic_ai_durable.docs import (
-    DocDefinition,
     DocumentManager,
     define_doc,
 )
+
 from pydantic_ai_durable.harness import DurableHarness
 from pydantic_ai_durable.models import (
     ConversationRecord,
-    DurableDocRecord,
     TranscriptEntryKind,
     TranscriptEntryRecord,
 )
 from pydantic_ai_durable.storage import AioSqliteStorage
-from pydantic_ai_durable.streaming import StreamEvent, stream_hub
+from pydantic_ai_durable.streaming import StreamEvent
 
 
 class PlanV1(BaseModel):
@@ -48,7 +44,9 @@ class PlanV2(BaseModel):
 async def test_document_persistence_and_version_migration(tmp_path: Path) -> None:
     db_file = tmp_path / "test_doc_mig.db"
     async with AioSqliteStorage(db_file) as storage:
-        doc_def_v1 = define_doc("project_plan", PlanV1, version=1, initial=lambda: PlanV1(title="Sprint 1"))
+        doc_def_v1 = define_doc(
+            "project_plan", PlanV1, version=1, initial=lambda: PlanV1(title="Sprint 1")
+        )
         doc_v1 = await DocumentManager.get_doc(storage, doc_def_v1, "conv-1", doc_id="plan-1")
         assert doc_v1.title == "Sprint 1"
 
@@ -82,7 +80,9 @@ async def test_document_rollback_on_tool_failure(tmp_path: Path) -> None:
     db_file = tmp_path / "test_doc_rollback.db"
     async with AioSqliteStorage(db_file) as storage:
         doc_def = define_doc("counter", PlanV1, version=1, initial=lambda: PlanV1(title="Baseline"))
-        await DocumentManager.set_doc(storage, doc_def, "conv-rb", PlanV1(title="Original"), doc_id="cnt")
+        await DocumentManager.set_doc(
+            storage, doc_def, "conv-rb", PlanV1(title="Original"), doc_id="cnt"
+        )
 
         with pytest.raises(RuntimeError):
             async with storage.transaction() as conn:
@@ -101,7 +101,9 @@ async def test_document_rollback_on_tool_failure(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_auto_compaction_and_summary_checkpoint(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+async def test_auto_compaction_and_summary_checkpoint(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     caplog.set_level(logging.INFO)
     db_file = tmp_path / "test_compaction.db"
     async with AioSqliteStorage(db_file) as storage:

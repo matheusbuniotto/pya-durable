@@ -2,8 +2,9 @@ import asyncio
 import json
 import logging
 import uuid
-from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Generic, Sequence, TypeVar
+from collections.abc import AsyncIterator, Sequence
+from dataclasses import dataclass
+from typing import Any, Generic, TypeVar
 
 from pydantic_ai import Agent
 from pydantic_ai.messages import (
@@ -12,16 +13,15 @@ from pydantic_ai.messages import (
     ToolCallPart,
 )
 
-from pydantic_ai_durable.tasks.approvals import ApprovalRequiredError
 from pydantic_ai_durable.models import (
     TaskStatus,
     TranscriptEntryKind,
     TranscriptEntryRecord,
-    utc_now_iso,
 )
-from pydantic_ai_durable.tasks.replay import durable_execution_context
 from pydantic_ai_durable.storage.base import DurableStorage
 from pydantic_ai_durable.streaming.hub import StreamEvent, stream_hub
+from pydantic_ai_durable.tasks.approvals import ApprovalRequiredError
+from pydantic_ai_durable.tasks.replay import durable_execution_context
 
 logger = logging.getLogger("pydantic_ai_durable.engine")
 
@@ -82,9 +82,7 @@ class DurableStepEngine:
 
         return current_parent_id
 
-    def _extract_node_payload(
-        self, node: Any, prompt_text: str
-    ) -> tuple[TranscriptEntryKind, str]:
+    def _extract_node_payload(self, node: Any, prompt_text: str) -> tuple[TranscriptEntryKind, str]:
         node_name = type(node).__name__
 
         if node_name == "UserPromptNode":
@@ -167,14 +165,16 @@ class DurableStepEngine:
                         entry_id = f"entry-{uuid.uuid4().hex[:16]}"
                         kind, payload = self._extract_node_payload(node, user_prompt)
 
-                        if hasattr(node, "model_response") and hasattr(node.model_response, "usage"):
+                        if hasattr(node, "model_response") and hasattr(
+                            node.model_response, "usage"
+                        ):
                             u = node.model_response.usage
                             if u is not None:
                                 in_tok = getattr(u, "input_tokens", 0) or 0
                                 out_tok = getattr(u, "output_tokens", 0) or 0
                                 cumulative_usage["input_tokens"] += in_tok
                                 cumulative_usage["output_tokens"] += out_tok
-                                cumulative_usage["total_tokens"] += (in_tok + out_tok)
+                                cumulative_usage["total_tokens"] += in_tok + out_tok
 
                         entry = TranscriptEntryRecord(
                             entry_id=entry_id,
@@ -214,7 +214,9 @@ class DurableStepEngine:
                             ),
                         )
                         current_parent_id = entry_id
-                        current_parent_id = await self._drain_steers(runner, conversation_id, current_parent_id)
+                        current_parent_id = await self._drain_steers(
+                            runner, conversation_id, current_parent_id
+                        )
 
                         yield StepNodeCommit(
                             node_name=node_name,
@@ -233,10 +235,14 @@ class DurableStepEngine:
                             task_id=task_id,
                             status=TaskStatus.COMPLETED,
                             phase="completed",
-                            state_json=json.dumps({
-                                "output": str(final_output) if not hasattr(final_output, "model_dump_json") else final_output.model_dump_json(),
-                                "usage": cumulative_usage,
-                            }),
+                            state_json=json.dumps(
+                                {
+                                    "output": str(final_output)
+                                    if not hasattr(final_output, "model_dump_json")
+                                    else final_output.model_dump_json(),
+                                    "usage": cumulative_usage,
+                                }
+                            ),
                             checkpoint_json=current_parent_id,
                         )
 
@@ -247,11 +253,13 @@ class DurableStepEngine:
                 task_id=task_id,
                 status=TaskStatus.FAILED,
                 phase="failed",
-                state_json=json.dumps({
-                    "error": str(exc),
-                    "error_type": type(exc).__name__,
-                    "usage": cumulative_usage,
-                }),
+                state_json=json.dumps(
+                    {
+                        "error": str(exc),
+                        "error_type": type(exc).__name__,
+                        "usage": cumulative_usage,
+                    }
+                ),
                 checkpoint_json=current_parent_id,
             )
             raise
@@ -304,14 +312,16 @@ class DurableStepEngine:
                         entry_id = f"entry-{uuid.uuid4().hex[:16]}"
                         kind, payload = self._extract_node_payload(node, user_prompt)
 
-                        if hasattr(node, "model_response") and hasattr(node.model_response, "usage"):
+                        if hasattr(node, "model_response") and hasattr(
+                            node.model_response, "usage"
+                        ):
                             u = node.model_response.usage
                             if u is not None:
                                 in_tok = getattr(u, "input_tokens", 0) or 0
                                 out_tok = getattr(u, "output_tokens", 0) or 0
                                 cumulative_usage["input_tokens"] += in_tok
                                 cumulative_usage["output_tokens"] += out_tok
-                                cumulative_usage["total_tokens"] += (in_tok + out_tok)
+                                cumulative_usage["total_tokens"] += in_tok + out_tok
 
                         entry = TranscriptEntryRecord(
                             entry_id=entry_id,
@@ -351,7 +361,9 @@ class DurableStepEngine:
                             ),
                         )
                         current_parent_id = entry_id
-                        current_parent_id = await self._drain_steers(runner, conversation_id, current_parent_id)
+                        current_parent_id = await self._drain_steers(
+                            runner, conversation_id, current_parent_id
+                        )
 
                         commit = StepNodeCommit(
                             node_name=node_name,
@@ -377,7 +389,9 @@ class DurableStepEngine:
                             break
 
                     current_task = await self.storage.get_task(task_id)
-                    is_waiting = current_task is not None and current_task.status == TaskStatus.WAITING
+                    is_waiting = (
+                        current_task is not None and current_task.status == TaskStatus.WAITING
+                    )
                     challenge_tok = None
                     if is_waiting and current_task is not None:
                         challenge_tok = current_task.checkpoint_json
@@ -387,15 +401,21 @@ class DurableStepEngine:
                             task_id=task_id,
                             status=TaskStatus.RUNNING,
                             phase="interrupted",
-                            state_json=json.dumps({
-                                "interrupted": True,
-                                "last_node": last_node_name,
-                                "usage": cumulative_usage,
-                            }),
+                            state_json=json.dumps(
+                                {
+                                    "interrupted": True,
+                                    "last_node": last_node_name,
+                                    "usage": cumulative_usage,
+                                }
+                            ),
                             checkpoint_json=current_parent_id,
                         )
                     elif not is_waiting:
-                        if extracted_output is None and hasattr(runner, "result") and runner.result is not None:
+                        if (
+                            extracted_output is None
+                            and hasattr(runner, "result")
+                            and runner.result is not None
+                        ):
                             extracted_output = runner.result.output
 
                         out_str = (
@@ -407,10 +427,12 @@ class DurableStepEngine:
                             task_id=task_id,
                             status=TaskStatus.COMPLETED,
                             phase="completed",
-                            state_json=json.dumps({
-                                "output": out_str,
-                                "usage": cumulative_usage,
-                            }),
+                            state_json=json.dumps(
+                                {
+                                    "output": out_str,
+                                    "usage": cumulative_usage,
+                                }
+                            ),
                             checkpoint_json=current_parent_id,
                         )
 
@@ -443,11 +465,13 @@ class DurableStepEngine:
                 task_id=task_id,
                 status=TaskStatus.FAILED,
                 phase="failed",
-                state_json=json.dumps({
-                    "error": str(exc),
-                    "error_type": type(exc).__name__,
-                    "usage": cumulative_usage,
-                }),
+                state_json=json.dumps(
+                    {
+                        "error": str(exc),
+                        "error_type": type(exc).__name__,
+                        "usage": cumulative_usage,
+                    }
+                ),
                 checkpoint_json=current_parent_id,
             )
             raise

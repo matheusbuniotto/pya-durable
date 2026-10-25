@@ -29,6 +29,7 @@ uv pip install "git+https://github.com/matheusbuniotto/pydantic-ai-durable"
 Both package imports work interchangeably:
 ```python
 import pydantic_ai_durable as pad
+
 # or
 import pya_durable as pad
 ```
@@ -43,6 +44,7 @@ from pydantic_ai_durable import (
     create_models,
     openrouter_provider,
 )
+
 
 async def main():
     # 1. Pluggable Auth & Providers (OpenRouter, OpenAI, Anthropic, Gemini, Groq, Ollama)
@@ -64,6 +66,7 @@ async def main():
     print("Agent:", result.output)
 
     await harness.close()
+
 
 asyncio.run(main())
 ```
@@ -94,10 +97,12 @@ Declare tool replay safety so crashes never cause accidental side-effects:
 ```python
 from pydantic_ai_durable import durable_tool, set_tool_partial_output
 
+
 # SAFE: Read-only operations automatically rerun on crash recovery
 @durable_tool(replay="safe")
 async def search_database(query: str) -> str:
     return f"Results for: {query}"
+
 
 # UNSAFE: Mutating calls are NEVER repeated automatically
 @durable_tool(replay="unsafe")
@@ -116,10 +121,12 @@ Pause turn execution for sensitive operations and wait for human operator interv
 ```python
 from pydantic_ai_durable import approval_gate, DurableHarness
 
+
 # Intercept sensitive actions and generate challenge token
 @approval_gate(description="Approve database migration on production")
 async def drop_production_table(table_name: str) -> str:
     return f"Dropped {table_name}"
+
 
 # The agent turn pauses with TaskStatus.WAITING ("waiting_approval").
 # External operator reviews challenge token and approves (with optional argument rewrite):
@@ -139,13 +146,14 @@ Orchestrate complex distributed workflows with parallel fan-out and automatic re
 ```python
 from pydantic_ai_durable import define_saga, SagaContext, SagaResult, SagaPolicy
 
+
 @define_saga(name="cloud.provision_cluster", initial_step="reserve_nodes")
 class ProvisionClusterSaga:
     async def reserve_nodes(self, ctx: SagaContext) -> SagaResult:
         # Parallel fan-out across multiple child tasks
         w1 = await ctx.spawn_child("cloud.reserve", {"type": "gpu-h100"})
         w2 = await ctx.spawn_child("cloud.reserve", {"type": "cpu-m6i"})
-        
+
         # Await with fail-fast cascade
         await ctx.wait_for_children(policy=SagaPolicy.FAIL_FAST)
         return ctx.transition_to("configure_network")

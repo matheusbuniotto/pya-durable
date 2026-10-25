@@ -1,10 +1,9 @@
 """Tests for pluggable AI model providers, auth configuration, and Pi Durable bootstrap ergonomics."""
 
-import os
-from pathlib import Path
 import tempfile
-import pytest
+from pathlib import Path
 
+import pytest
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
 
@@ -19,7 +18,6 @@ from pydantic_ai_durable import (
     anthropic_provider,
     create_models,
     gemini_provider,
-    global_models_registry,
     ollama_provider,
     openai_provider,
     openrouter_provider,
@@ -46,7 +44,9 @@ async def test_create_models_registry():
 @pytest.mark.asyncio
 async def test_openai_and_anthropic_providers():
     models = create_models()
-    models.set_provider(openai_provider(api_key="sk-openai-test", base_url="https://api.openai.com/v1"))
+    models.set_provider(
+        openai_provider(api_key="sk-openai-test", base_url="https://api.openai.com/v1")
+    )
     models.set_provider(anthropic_provider(api_key="sk-ant-test"))
 
     oai_p = models.get_provider("openai")
@@ -186,10 +186,14 @@ async def test_harness_conversation_by_id():
     storage = MemoryStorage()
     harness = await Harness.open(storage)
 
-    conv_a = await harness.conversation("channel-alpha", agent=Agent(TestModel(custom_output_text="Alpha OK")))
+    conv_a = await harness.conversation(
+        "channel-alpha", agent=Agent(TestModel(custom_output_text="Alpha OK"))
+    )
     res_a = await conv_a.run_turn("Ping Alpha")
     assert res_a.output == "Alpha OK"
 
-    conv_b = await harness.conversation("channel-beta", agent=Agent(TestModel(custom_output_text="Beta OK")))
+    conv_b = await harness.conversation(
+        "channel-beta", agent=Agent(TestModel(custom_output_text="Beta OK"))
+    )
     res_b = await conv_b.run_turn("Ping Beta")
     assert res_b.output == "Beta OK"

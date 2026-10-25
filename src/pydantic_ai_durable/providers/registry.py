@@ -55,10 +55,9 @@ class ModelsRegistry:
     ) -> ModelsRegistry:
         """Register or configure a model provider with explicit auth credentials."""
         if isinstance(name_or_provider, Provider):
-            provider_name = (
-                getattr(name_or_provider, "name", None)
-                or type(name_or_provider).__name__.lower().replace("provider", "")
-            )
+            provider_name = getattr(name_or_provider, "name", None) or type(
+                name_or_provider
+            ).__name__.lower().replace("provider", "")
             self._providers[self._normalize_name(provider_name)] = name_or_provider
             return self
 
@@ -266,7 +265,9 @@ def resolve_agent(
         if tools or system_prompt:
             existing_tools: list[Any] = []
             if hasattr(agent_or_spec, "_function_toolset"):
-                existing_tools = list(getattr(agent_or_spec._function_toolset, "tools", {}).values())
+                existing_tools = list(
+                    getattr(agent_or_spec._function_toolset, "tools", {}).values()
+                )
             all_tools = existing_tools + list(tools or [])
             return Agent(
                 model=agent_or_spec.model,
@@ -276,7 +277,11 @@ def resolve_agent(
             )
         return agent_or_spec
 
-    if isinstance(agent_or_spec, dict) and "agent" in agent_or_spec and isinstance(agent_or_spec["agent"], (dict, str, Agent, Model)):
+    if (
+        isinstance(agent_or_spec, dict)
+        and "agent" in agent_or_spec
+        and isinstance(agent_or_spec["agent"], (dict, str, Agent, Model))
+    ):
         inner = agent_or_spec["agent"]
         dict_tools = agent_or_spec.get("tools")
         dict_prompt = agent_or_spec.get("system_prompt") or agent_or_spec.get("prompt")

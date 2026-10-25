@@ -1,8 +1,8 @@
 import shutil
 import subprocess
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
 
 class GitWorktreeManager:
@@ -20,7 +20,11 @@ class GitWorktreeManager:
     ) -> Path:
         repo_dir = Path(repo_dir).resolve()
         target_branch = branch_name or f"branch-{conversation_id}"
-        wt_path = Path(worktree_path).resolve() if worktree_path else (repo_dir.parent / f"wt-{conversation_id}").resolve()
+        wt_path = (
+            Path(worktree_path).resolve()
+            if worktree_path
+            else (repo_dir.parent / f"wt-{conversation_id}").resolve()
+        )
 
         if wt_path.exists():
             shutil.rmtree(wt_path, ignore_errors=True)
@@ -100,9 +104,7 @@ class GitWorktreeManager:
     def list_worktrees(cls, repo_dir: str | Path) -> list[dict[str, str]]:
         repo_dir = Path(repo_dir).resolve()
         cmd = ["git", "worktree", "list", "--porcelain"]
-        proc = subprocess.run(
-            cmd, cwd=str(repo_dir), capture_output=True, text=True, check=True
-        )
+        proc = subprocess.run(cmd, cwd=str(repo_dir), capture_output=True, text=True, check=True)
 
         worktrees: list[dict[str, str]] = []
         current: dict[str, str] = {}

@@ -1,7 +1,5 @@
-import asyncio
 import logging
 import sqlite3
-import tempfile
 from pathlib import Path
 
 import aiosqlite
@@ -29,7 +27,9 @@ def db_path(tmp_path: Path) -> str:
 
 
 @pytest.mark.asyncio
-async def test_init_db_creates_tables_and_wal(db_path: str, caplog: pytest.LogCaptureFixture) -> None:
+async def test_init_db_creates_tables_and_wal(
+    db_path: str, caplog: pytest.LogCaptureFixture
+) -> None:
     caplog.set_level(logging.INFO)
     storage = AioSqliteStorage(db_path)
     try:

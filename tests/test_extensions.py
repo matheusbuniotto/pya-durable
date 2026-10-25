@@ -1,22 +1,18 @@
-import asyncio
 import json
-import logging
 from pathlib import Path
 from typing import Any
 
 import pytest
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
+from pydantic_ai_durable.replay import durable_tool
 
 from pydantic_ai_durable.extensions import (
-    ExtensionDefinition,
     ExtensionRegistry,
     HookContext,
     HookDecision,
-    PromptSection,
     SectionContext,
     ToolCallInfo,
-    ToolWrapper,
     define_extension,
     define_section,
     global_extension_registry,
@@ -25,7 +21,6 @@ from pydantic_ai_durable.extensions import (
 )
 from pydantic_ai_durable.harness import DurableHarness
 from pydantic_ai_durable.models import TranscriptEntryKind
-from pydantic_ai_durable.replay import durable_tool
 from pydantic_ai_durable.storage import AioSqliteStorage
 
 
@@ -57,6 +52,7 @@ def test_extension_tool_overriding_by_name():
 
     def custom_greet():
         return "extended"
+
     custom_greet.__name__ = "greet"
 
     registry = ExtensionRegistry()
@@ -74,7 +70,9 @@ async def test_prompt_sections_rendered_with_priorities():
     registry = ExtensionRegistry()
     sec_low = define_section("footer", lambda: "System Footer", priority=200)
     sec_high = define_section("header", lambda: "System Header", priority=10)
-    sec_mid = define_section("body", lambda ctx: f"Conversation: {ctx.conversation_id}", priority=50)
+    sec_mid = define_section(
+        "body", lambda ctx: f"Conversation: {ctx.conversation_id}", priority=50
+    )
 
     ext = define_extension("sections_ext", sections=[sec_low, sec_high, sec_mid])
     registry.install(ext)
@@ -99,6 +97,7 @@ def test_tool_wrapping_timing_and_metrics():
         def inner(val: int) -> int:
             metric_calls.append(val)
             return fn(val) + 10
+
         inner.__name__ = fn.__name__
         return inner
 
@@ -145,7 +144,9 @@ async def test_before_tool_argument_rewriting():
             return HookDecision(modified_args={"n": abs(val)})
         return None
 
-    ext = define_extension("normalizer", hooks=[hook(name="abs_rewriter", before_tool=normalize_hook)])
+    ext = define_extension(
+        "normalizer", hooks=[hook(name="abs_rewriter", before_tool=normalize_hook)]
+    )
     global_extension_registry.install(ext)
 
     result = await process_number(n=-7)
@@ -221,7 +222,9 @@ async def test_harness_integration_with_extensions(tmp_path: Path):
     async with AioSqliteStorage(db_file) as storage:
         agent = Agent(TestModel())
         registry = ExtensionRegistry()
-        sec = define_section("policy", lambda ctx: "POLICY: Read-only transactions permitted", priority=5)
+        sec = define_section(
+            "policy", lambda ctx: "POLICY: Read-only transactions permitted", priority=5
+        )
         registry.install(define_extension("enterprise_policy", sections=[sec]))
 
         harness = DurableHarness(agent, storage, conversation_id="conv-ext-test", registry=registry)

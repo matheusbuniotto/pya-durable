@@ -1,10 +1,11 @@
-from datetime import datetime, timezone
 import asyncio
 import inspect
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from datetime import datetime, timezone
+from typing import Any
 
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
@@ -15,13 +16,12 @@ from pydantic_ai_durable.models import (
     ReplayPolicy,
     TaskRecord,
     TaskStatus,
-    ToolInvocationRecord,
     ToolInvocationStatus,
     TranscriptEntryKind,
     utc_now_iso,
 )
-from pydantic_ai_durable.tasks.replay import TOOL_REGISTRY, durable_execution_context
 from pydantic_ai_durable.storage.base import DurableStorage
+from pydantic_ai_durable.tasks.replay import TOOL_REGISTRY, durable_execution_context
 
 logger = logging.getLogger("pydantic_ai_durable.tasks.recovery")
 
@@ -63,9 +63,21 @@ class CrashRecoveryManager:
                     if appr.status == ApprovalStatus.PENDING:
                         if appr.expires_at is not None:
                             try:
-                                if datetime.now(timezone.utc) > datetime.fromisoformat(appr.expires_at):
-                                    dec = ApprovalDecision(status=ApprovalStatus.EXPIRED, approver="system", reason="Approval deadline expired", resolved_at=utc_now_iso())
-                                    appr = await self.storage.resolve_approval_request(challenge_token, ApprovalStatus.EXPIRED, dec.model_dump_json(), dec.resolved_at)
+                                if datetime.now(timezone.utc) > datetime.fromisoformat(
+                                    appr.expires_at
+                                ):
+                                    dec = ApprovalDecision(
+                                        status=ApprovalStatus.EXPIRED,
+                                        approver="system",
+                                        reason="Approval deadline expired",
+                                        resolved_at=utc_now_iso(),
+                                    )
+                                    appr = await self.storage.resolve_approval_request(
+                                        challenge_token,
+                                        ApprovalStatus.EXPIRED,
+                                        dec.model_dump_json(),
+                                        dec.resolved_at,
+                                    )
                             except Exception:
                                 pass
                         if appr.status == ApprovalStatus.PENDING:
@@ -84,7 +96,9 @@ class CrashRecoveryManager:
                             task_id=task.task_id,
                             status=new_status,
                             phase=reconciled_phase,
-                            state_json=json.dumps({"resumed_approved": True, "challenge_token": challenge_token}),
+                            state_json=json.dumps(
+                                {"resumed_approved": True, "challenge_token": challenge_token}
+                            ),
                             checkpoint_json=task.checkpoint_json,
                         )
                         return TaskRecoveryResult(
@@ -124,7 +138,9 @@ class CrashRecoveryManager:
                     task_id=task.task_id,
                     status=new_status,
                     phase=reconciled_phase,
-                    state_json=json.dumps({"error": "Child task failed while waiting", "reconciled": True}),
+                    state_json=json.dumps(
+                        {"error": "Child task failed while waiting", "reconciled": True}
+                    ),
                 )
                 return TaskRecoveryResult(
                     task_id=task.task_id,
@@ -187,9 +203,7 @@ class CrashRecoveryManager:
                         ):
                             if inspect.iscoroutinefunction(tool_func):
                                 if timeout is not None:
-                                    res = await asyncio.wait_for(
-                                        tool_func(**args), timeout=timeout
-                                    )
+                                    res = await asyncio.wait_for(tool_func(**args), timeout=timeout)
                                 else:
                                     res = await tool_func(**args)
                             else:
@@ -233,12 +247,14 @@ class CrashRecoveryManager:
                 task_id=task.task_id,
                 status=new_status,
                 phase=reconciled_phase,
-                state_json=json.dumps({
-                    "interrupted": True,
-                    "unsafe_interrupted": unsafe_interrupted,
-                    "safe_replayed": safe_replayed,
-                    "reconciled": True,
-                }),
+                state_json=json.dumps(
+                    {
+                        "interrupted": True,
+                        "unsafe_interrupted": unsafe_interrupted,
+                        "safe_replayed": safe_replayed,
+                        "reconciled": True,
+                    }
+                ),
                 checkpoint_json=task.checkpoint_json,
             )
         elif errors:
@@ -248,10 +264,12 @@ class CrashRecoveryManager:
                 task_id=task.task_id,
                 status=new_status,
                 phase=reconciled_phase,
-                state_json=json.dumps({
-                    "errors": errors,
-                    "reconciled": True,
-                }),
+                state_json=json.dumps(
+                    {
+                        "errors": errors,
+                        "reconciled": True,
+                    }
+                ),
                 checkpoint_json=task.checkpoint_json,
             )
         else:
@@ -261,10 +279,12 @@ class CrashRecoveryManager:
                 task_id=task.task_id,
                 status=new_status,
                 phase=reconciled_phase,
-                state_json=json.dumps({
-                    "safe_replayed": safe_replayed,
-                    "reconciled": True,
-                }),
+                state_json=json.dumps(
+                    {
+                        "safe_replayed": safe_replayed,
+                        "reconciled": True,
+                    }
+                ),
                 checkpoint_json=task.checkpoint_json,
             )
 
@@ -308,7 +328,11 @@ class CrashRecoveryManager:
         recovery_result = await self.reconcile_task(task)
 
         active_agent = agent or self.agent
-        if active_agent is not None and recovery_result.unsafe_tools_interrupted == 0 and not recovery_result.errors:
+        if (
+            active_agent is not None
+            and recovery_result.unsafe_tools_interrupted == 0
+            and not recovery_result.errors
+        ):
             prompt = ""
             try:
                 data = json.loads(task.input_json)

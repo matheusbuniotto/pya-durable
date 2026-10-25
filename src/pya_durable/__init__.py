@@ -17,7 +17,7 @@ class _PyaAliasFinder(MetaPathFinder):
         target: Any = None,
     ) -> ModuleSpec | None:
         if fullname == "pya_durable" or fullname.startswith("pya_durable."):
-            canonical_name = "pydantic_ai_durable" + fullname[len("pya_durable"):]
+            canonical_name = "pydantic_ai_durable" + fullname[len("pya_durable") :]
             __import__(canonical_name)
             canonical_mod = sys.modules[canonical_name]
             sys.modules[fullname] = canonical_mod

@@ -9,6 +9,15 @@ from typing import Any
 import pytest
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.test import TestModel
+from pydantic_ai_durable.subagents import SubagentManager, SubagentResult
+from pydantic_ai_durable.task_tree import (
+    CycleDetectedError,
+    TaskContext,
+    TaskPhaseResult,
+    TaskRunner,
+    check_cycle,
+    define_task,
+)
 
 from pydantic_ai_durable.models import (
     ConversationRecord,
@@ -16,16 +25,6 @@ from pydantic_ai_durable.models import (
     TaskStatus,
 )
 from pydantic_ai_durable.storage import AioSqliteStorage
-from pydantic_ai_durable.subagents import SubagentManager, SubagentResult
-from pydantic_ai_durable.task_tree import (
-    CycleDetectedError,
-    TaskContext,
-    TaskDefinition,
-    TaskPhaseResult,
-    TaskRunner,
-    check_cycle,
-    define_task,
-)
 
 
 @pytest.mark.asyncio
@@ -45,7 +44,9 @@ async def test_multi_tier_depth_three(temp_db: str) -> None:
         runner.register_task(grandchild_def)
 
         async def child_start(ctx: TaskContext) -> TaskPhaseResult:
-            gc = await ctx.create_child_task("grandchild_task", {"val": ctx.input_data.get("val", 0)})
+            gc = await ctx.create_child_task(
+                "grandchild_task", {"val": ctx.input_data.get("val", 0)}
+            )
             res = await runner.run_task(
                 grandchild_def,
                 input_data={"val": ctx.input_data.get("val", 0)},

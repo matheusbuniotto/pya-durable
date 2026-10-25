@@ -12,10 +12,9 @@ import aiosqlite
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 
-from pydantic_ai_durable.tasks.approvals import ApprovalManager, ApprovalRequestRecord
+from pydantic_ai_durable.engine import DurableStepEngine, TurnResult
 from pydantic_ai_durable.extensions.compaction import BackgroundCompactor
 from pydantic_ai_durable.extensions.docs import DocDefinition, DocumentManager
-from pydantic_ai_durable.engine import DurableStepEngine, TurnResult
 from pydantic_ai_durable.extensions.memo import MemoManager
 from pydantic_ai_durable.models import (
     ConversationRecord,
@@ -26,7 +25,11 @@ from pydantic_ai_durable.models import (
     TranscriptEntryKind,
     TranscriptEntryRecord,
 )
-from pydantic_ai_durable.providers.registry import ModelsRegistry, global_models_registry, resolve_agent
+from pydantic_ai_durable.providers.registry import (
+    ModelsRegistry,
+    global_models_registry,
+    resolve_agent,
+)
 from pydantic_ai_durable.steering import global_steering_queue
 from pydantic_ai_durable.storage.base import DurableStorage
 from pydantic_ai_durable.streaming.hub import (
@@ -38,6 +41,7 @@ from pydantic_ai_durable.streaming.hub import (
     multiplayer_hub,
     stream_hub,
 )
+from pydantic_ai_durable.tasks.approvals import ApprovalManager, ApprovalRequestRecord
 
 if TYPE_CHECKING:
     from pydantic_ai_durable.env import ExecutionEnv
@@ -99,6 +103,7 @@ class DurableConversation:
                 return self._env_factory(self.conversation_id, None)
             return self._env_factory
         from pydantic_ai_durable.env import LocalExecutionEnv
+
         return LocalExecutionEnv(cwd=Path.cwd())
 
     @property
@@ -207,12 +212,14 @@ class DurableConversation:
                 msg = json.loads(e.message_json)
             except Exception:
                 msg = e.message_json
-            formatted_entries.append({
-                "entry_id": e.entry_id,
-                "kind": e.kind.value,
-                "created_at": e.created_at,
-                "message": msg,
-            })
+            formatted_entries.append(
+                {
+                    "entry_id": e.entry_id,
+                    "kind": e.kind.value,
+                    "created_at": e.created_at,
+                    "message": msg,
+                }
+            )
 
         doc_records = await self.storage.list_durable_docs(self.conversation_id)
         docs_dict: dict[str, Any] = {}
@@ -265,12 +272,14 @@ class DurableConversation:
                 msg = json.loads(e.message_json)
             except Exception:
                 msg = e.message_json
-            formatted_entries.append({
-                "entry_id": e.entry_id,
-                "kind": e.kind.value,
-                "created_at": e.created_at,
-                "message": msg,
-            })
+            formatted_entries.append(
+                {
+                    "entry_id": e.entry_id,
+                    "kind": e.kind.value,
+                    "created_at": e.created_at,
+                    "message": msg,
+                }
+            )
 
         doc_records = await self.storage.list_durable_docs(self.conversation_id)
         docs_dict: dict[str, Any] = {}
@@ -324,16 +333,10 @@ class DurableConversation:
 
         entry = await self.storage.get_transcript_entry(target_fork_id)
         if entry is None:
-            raise InvalidForkEntryError(
-                f"Fork entry '{target_fork_id}' does not exist in storage"
-            )
+            raise InvalidForkEntryError(f"Fork entry '{target_fork_id}' does not exist in storage")
 
         child_conv_id = new_conversation_id or f"conv-{uuid.uuid4().hex[:12]}"
-        child_agent = (
-            resolve_agent(agent, models=self.models)
-            if agent is not None
-            else self.agent
-        )
+        child_agent = resolve_agent(agent, models=self.models) if agent is not None else self.agent
 
         record = ConversationRecord(
             conversation_id=child_conv_id,
@@ -516,9 +519,13 @@ class DurableConversation:
                 )
             await self.refresh_view_states()
 
-            if not turn_result.waiting_approval and self.auto_compact and BackgroundCompactor.should_compact(
-                turn_result.token_usage.get("total_tokens", 0),
-                threshold=self.compaction_threshold,
+            if (
+                not turn_result.waiting_approval
+                and self.auto_compact
+                and BackgroundCompactor.should_compact(
+                    turn_result.token_usage.get("total_tokens", 0),
+                    threshold=self.compaction_threshold,
+                )
             ):
                 await BackgroundCompactor.compact_conversation(
                     self.storage,

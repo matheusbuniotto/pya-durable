@@ -1,11 +1,12 @@
 from __future__ import annotations
+
 import asyncio
-import json
 import logging
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 import aiosqlite
 
@@ -25,9 +26,10 @@ from pydantic_ai_durable.models import (
     TranscriptEntryRecord,
     utc_now_iso,
 )
-from pydantic_ai_durable.storage.base import DurableStorage, SCHEMA_SQL
+from pydantic_ai_durable.storage.base import SCHEMA_SQL, DurableStorage
 
-logger = logging.getLogger('pydantic_ai_durable.storage.sqlite')
+logger = logging.getLogger("pydantic_ai_durable.storage.sqlite")
+
 
 class AioSqliteStorage(DurableStorage):
     def __init__(self, db_path: str | Path) -> None:
@@ -71,7 +73,7 @@ class AioSqliteStorage(DurableStorage):
                 self._conn = None
                 self._initialized = False
 
-    async def __aenter__(self) -> "AioSqliteStorage":
+    async def __aenter__(self) -> AioSqliteStorage:
         await self.init_db()
         return self
 
@@ -156,7 +158,9 @@ class AioSqliteStorage(DurableStorage):
                 entry.entry_id,
                 entry.conversation_id,
                 entry.parent_entry_id,
-                entry.kind.value if isinstance(entry.kind, TranscriptEntryKind) else str(entry.kind),
+                entry.kind.value
+                if isinstance(entry.kind, TranscriptEntryKind)
+                else str(entry.kind),
                 entry.message_json,
                 entry.created_at,
             ),
@@ -764,7 +768,6 @@ class AioSqliteStorage(DurableStorage):
                 for row in rows
             ]
 
-
     async def checkpoint(self) -> tuple[int, int, int]:
         conn = await self.get_connection()
         async with conn.execute("PRAGMA wal_checkpoint(TRUNCATE)") as cursor:
@@ -994,8 +997,6 @@ class AioSqliteStorage(DurableStorage):
             (status.value, decision_json, ts, challenge_token),
         )
         return await self.get_approval_request(challenge_token, conn=target)
-
-
 
 
 SqliteStorage = AioSqliteStorage

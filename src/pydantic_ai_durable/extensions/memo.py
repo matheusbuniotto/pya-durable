@@ -29,6 +29,7 @@ class MemoManager:
         conv = await storage.get_conversation(conversation_id)
         if conv is None:
             from pydantic_ai_durable.models import ConversationRecord
+
             await storage.insert_conversation(
                 ConversationRecord(
                     conversation_id=conversation_id,

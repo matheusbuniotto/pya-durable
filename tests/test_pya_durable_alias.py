@@ -4,8 +4,8 @@ import pytest
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
 
-import pydantic_ai_durable
 import pya_durable
+import pydantic_ai_durable
 
 
 def test_top_level_alias_identity():
@@ -25,15 +25,21 @@ def test_top_level_alias_identity():
 
 def test_submodule_alias_identity():
     from pya_durable.models import TaskStatus as TS1
+
     from pydantic_ai_durable.models import TaskStatus as TS2
+
     assert TS1 is TS2
 
     from pya_durable.harness import DurableHarness as H1
+
     from pydantic_ai_durable.harness import DurableHarness as H2
+
     assert H1 is H2
 
     from pya_durable.storage import SqliteStorage as S1
+
     from pydantic_ai_durable.storage import SqliteStorage as S2
+
     assert S1 is S2
 
 

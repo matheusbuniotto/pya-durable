@@ -4,21 +4,20 @@ import inspect
 import json
 import logging
 import uuid
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, AsyncIterator, Callable, TypeVar
-
 from datetime import datetime, timezone
+from typing import Any, TypeVar
+
 from pydantic_ai_durable.extensions.registry import (
     HookContext,
-    HookDecision,
     ToolCallInfo,
     global_extension_registry,
 )
 from pydantic_ai_durable.models import (
     ApprovalDecision,
-    ApprovalRequestRecord,
     ApprovalStatus,
     ReplayPolicy,
     TaskRecord,
@@ -58,6 +57,7 @@ class DurableContext:
         policy: str = "failFast",
     ) -> TaskRecord:
         import uuid
+
         child_task_id = f"task-{uuid.uuid4().hex[:12]}"
         task_name = getattr(task_def_or_name, "name", str(task_def_or_name))
         in_json = json.dumps(input_data) if not isinstance(input_data, str) else input_data
@@ -83,6 +83,7 @@ class DurableContext:
         timeout: float | None = None,
     ) -> TaskRecord:
         import time
+
         start_time = time.monotonic()
         while True:
             rec = await self.storage.get_task(task_id)
@@ -97,7 +98,9 @@ class DurableContext:
             await asyncio.sleep(poll_interval)
 
 
-async def create_durable_task(task_def_or_name: Any, input_data: Any, policy: str = "failFast") -> TaskRecord:
+async def create_durable_task(
+    task_def_or_name: Any, input_data: Any, policy: str = "failFast"
+) -> TaskRecord:
     ctx = current_durable_context.get()
     if ctx is None:
         raise RuntimeError("No active durable execution context")
@@ -158,9 +161,7 @@ def _serialize_arguments(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> s
                 args_dict[k] = str(v)
         return json.dumps(args_dict)
     except Exception:
-        clean_kwargs = {
-            k: str(v) for k, v in kwargs.items() if type(v).__name__ != "RunContext"
-        }
+        clean_kwargs = {k: str(v) for k, v in kwargs.items() if type(v).__name__ != "RunContext"}
         return json.dumps(clean_kwargs)
 
 
@@ -237,6 +238,7 @@ def _create_tool_wrapper(
     is_async = inspect.iscoroutinefunction(fn)
 
     if is_async:
+
         @functools.wraps(fn)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             ctx = current_durable_context.get()
@@ -245,12 +247,14 @@ def _create_tool_wrapper(
                 sig = inspect.signature(fn)
                 bound = sig.bind_partial(*args, **kwargs)
                 args_dict = {
-                    k: v for k, v in bound.arguments.items()
+                    k: v
+                    for k, v in bound.arguments.items()
                     if type(v).__name__ != "RunContext" and k != "ctx"
                 }
             except Exception:
                 args_dict = {
-                    k: v for k, v in kwargs.items()
+                    k: v
+                    for k, v in kwargs.items()
                     if type(v).__name__ != "RunContext" and k != "ctx"
                 }
 
@@ -284,11 +288,17 @@ def _create_tool_wrapper(
                         error_message=f"Blocked: {decision.block}",
                     )
                     await ctx.storage.record_tool_started(record)
-                    await ctx.storage.record_tool_failed(invocation_id, f"Blocked: {decision.block}")
+                    await ctx.storage.record_tool_failed(
+                        invocation_id, f"Blocked: {decision.block}"
+                    )
                 return {"error": decision.block, "blocked": True}
 
             if decision is not None and decision.modified_args is not None:
-                if args and type(args[0]).__name__ == "RunContext" and "ctx" not in decision.modified_args:
+                if (
+                    args
+                    and type(args[0]).__name__ == "RunContext"
+                    and "ctx" not in decision.modified_args
+                ):
                     exec_args = (args[0],)
                     exec_kwargs = decision.modified_args
                 else:
@@ -306,6 +316,7 @@ def _create_tool_wrapper(
                 )
                 if needs_approval:
                     from pydantic_ai_durable.tasks.approvals import ApprovalRequiredError
+
                     prompt_template = (
                         approval_prompt
                         or getattr(fn, "_approval_prompt", None)
@@ -315,10 +326,13 @@ def _create_tool_wrapper(
                         challenge_token="standalone-appr",
                         tool_name=tool_name,
                         args=args_dict,
-                        prompt_message=prompt_template or f"Approve execution of tool '{tool_name}'",
+                        prompt_message=prompt_template
+                        or f"Approve execution of tool '{tool_name}'",
                     )
                 if timeout_seconds is not None:
-                    res = await asyncio.wait_for(fn(*exec_args, **exec_kwargs), timeout=timeout_seconds)
+                    res = await asyncio.wait_for(
+                        fn(*exec_args, **exec_kwargs), timeout=timeout_seconds
+                    )
                 else:
                     res = await fn(*exec_args, **exec_kwargs)
                 return await global_extension_registry.run_after_tool(call_info, res, hook_ctx)
@@ -364,7 +378,11 @@ def _create_tool_wrapper(
                                     overrides = json.loads(dec.override_args_json)
                                     combined = dict(args_dict)
                                     combined.update(overrides)
-                                    if exec_args and type(exec_args[0]).__name__ == "RunContext" and "ctx" not in combined:
+                                    if (
+                                        exec_args
+                                        and type(exec_args[0]).__name__ == "RunContext"
+                                        and "ctx" not in combined
+                                    ):
                                         exec_args = (exec_args[0],)
                                     else:
                                         exec_args = ()
@@ -397,7 +415,10 @@ def _create_tool_wrapper(
                         await ctx.storage.record_tool_started(record)
                         await ctx.storage.record_tool_failed(invocation_id, msg)
                         from pydantic_ai_durable.tasks.approvals import ApprovalRejectedError
-                        raise ApprovalRejectedError(challenge_token=appr.challenge_token, reason=reason)
+
+                        raise ApprovalRejectedError(
+                            challenge_token=appr.challenge_token, reason=reason
+                        )
                     elif appr.status == ApprovalStatus.EXPIRED:
                         msg = "Tool execution approval challenge expired."
                         invocation_id = f"inv-{uuid.uuid4().hex[:16]}"
@@ -417,10 +438,12 @@ def _create_tool_wrapper(
                         await ctx.storage.record_tool_started(record)
                         await ctx.storage.record_tool_failed(invocation_id, msg)
                         from pydantic_ai_durable.tasks.approvals import ApprovalExpiredError
+
                         raise ApprovalExpiredError(challenge_token=appr.challenge_token)
                     else:
                         ctx.last_challenge_token = appr.challenge_token
                         from pydantic_ai_durable.tasks.approvals import ApprovalRequiredError
+
                         raise ApprovalRequiredError(
                             challenge_token=appr.challenge_token,
                             tool_name=tool_name,
@@ -429,7 +452,10 @@ def _create_tool_wrapper(
                             expires_at=appr.expires_at,
                         )
                 else:
-                    from pydantic_ai_durable.tasks.approvals import ApprovalManager, ApprovalRequiredError
+                    from pydantic_ai_durable.tasks.approvals import (
+                        ApprovalManager,
+                        ApprovalRequiredError,
+                    )
 
                     appr_mgr = ApprovalManager(ctx.storage)
                     record = await appr_mgr.create_challenge(
@@ -462,11 +488,13 @@ def _create_tool_wrapper(
                         task_id=ctx.task_id,
                         status=TaskStatus.WAITING,
                         phase="waiting_approval",
-                        state_json=json.dumps({
-                            "waiting_approval": True,
-                            "challenge_token": record.challenge_token,
-                            "tool_name": tool_name,
-                        }),
+                        state_json=json.dumps(
+                            {
+                                "waiting_approval": True,
+                                "challenge_token": record.challenge_token,
+                                "tool_name": tool_name,
+                            }
+                        ),
                         checkpoint_json=record.challenge_token,
                     )
 
@@ -496,7 +524,9 @@ def _create_tool_wrapper(
 
             try:
                 if timeout_seconds is not None:
-                    res = await asyncio.wait_for(fn(*exec_args, **exec_kwargs), timeout=timeout_seconds)
+                    res = await asyncio.wait_for(
+                        fn(*exec_args, **exec_kwargs), timeout=timeout_seconds
+                    )
                 else:
                     res = await fn(*exec_args, **exec_kwargs)
 
@@ -512,6 +542,7 @@ def _create_tool_wrapper(
                 await ctx.storage.record_tool_failed(invocation_id, str(exc))
                 raise
     else:
+
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             ctx = current_durable_context.get()
@@ -520,12 +551,14 @@ def _create_tool_wrapper(
                 sig = inspect.signature(fn)
                 bound = sig.bind_partial(*args, **kwargs)
                 args_dict = {
-                    k: v for k, v in bound.arguments.items()
+                    k: v
+                    for k, v in bound.arguments.items()
                     if type(v).__name__ != "RunContext" and k != "ctx"
                 }
             except Exception:
                 args_dict = {
-                    k: v for k, v in kwargs.items()
+                    k: v
+                    for k, v in kwargs.items()
                     if type(v).__name__ != "RunContext" and k != "ctx"
                 }
 
@@ -561,13 +594,21 @@ def _create_tool_wrapper(
                     try:
                         loop = asyncio.get_running_loop()
                         loop.create_task(ctx.storage.record_tool_started(record))
-                        loop.create_task(ctx.storage.record_tool_failed(invocation_id, f"Blocked: {decision.block}"))
+                        loop.create_task(
+                            ctx.storage.record_tool_failed(
+                                invocation_id, f"Blocked: {decision.block}"
+                            )
+                        )
                     except RuntimeError:
                         pass
                 return {"error": decision.block, "blocked": True}
 
             if decision is not None and decision.modified_args is not None:
-                if args and type(args[0]).__name__ == "RunContext" and "ctx" not in decision.modified_args:
+                if (
+                    args
+                    and type(args[0]).__name__ == "RunContext"
+                    and "ctx" not in decision.modified_args
+                ):
                     exec_args = (args[0],)
                     exec_kwargs = decision.modified_args
                 else:

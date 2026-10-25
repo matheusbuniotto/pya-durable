@@ -1,19 +1,18 @@
 import asyncio
-from pathlib import Path
 import tempfile
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
-
 from pydantic_ai_durable.docs import define_doc
-from pydantic_ai_durable.harness import DurableHarness
 from pydantic_ai_durable.memo import MemoManager
+
+from pydantic_ai_durable.harness import DurableHarness
 from pydantic_ai_durable.storage import AioSqliteStorage
 from pydantic_ai_durable.streaming import (
     ClientPresenceEvent,
-    DocUpdatedEvent,
     MultiplayerPresenceHub,
     ReactiveViewState,
     TurnCompletedEvent,

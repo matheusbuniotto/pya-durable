@@ -1,9 +1,10 @@
 import asyncio
-from datetime import datetime, timezone, timedelta
 import json
 import logging
-from typing import Any, Callable, TypeVar
 import uuid
+from collections.abc import Callable
+from datetime import datetime, timedelta, timezone
+from typing import Any, TypeVar
 
 from pydantic_ai_durable.models import (
     ApprovalDecision,
@@ -126,7 +127,11 @@ class ApprovalManager:
 
         # Notify real-time stream hub and multiplayer hub if available
         try:
-            from pydantic_ai_durable.streaming import ApprovalRequestedEvent, stream_hub, multiplayer_hub
+            from pydantic_ai_durable.streaming import (
+                ApprovalRequestedEvent,
+                multiplayer_hub,
+                stream_hub,
+            )
 
             event = ApprovalRequestedEvent(
                 challenge_token=token,
@@ -247,7 +252,11 @@ class ApprovalManager:
 
         # Notify real-time stream hub and multiplayer hub if available
         try:
-            from pydantic_ai_durable.streaming import ApprovalResolvedEvent, stream_hub, multiplayer_hub
+            from pydantic_ai_durable.streaming import (
+                ApprovalResolvedEvent,
+                multiplayer_hub,
+                stream_hub,
+            )
 
             event = ApprovalResolvedEvent(
                 challenge_token=challenge_token,

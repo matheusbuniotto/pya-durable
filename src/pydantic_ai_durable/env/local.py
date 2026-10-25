@@ -45,20 +45,16 @@ class FileInfo:
 class ExecutionEnv(ABC):
     @property
     @abstractmethod
-    def cwd(self) -> Path:
-        ...
+    def cwd(self) -> Path: ...
 
     @abstractmethod
-    async def read_file(self, path: str, offset: int = 0, limit: int | None = None) -> str:
-        ...
+    async def read_file(self, path: str, offset: int = 0, limit: int | None = None) -> str: ...
 
     @abstractmethod
-    async def write_file(self, path: str, content: str, overwrite: bool = True) -> None:
-        ...
+    async def write_file(self, path: str, content: str, overwrite: bool = True) -> None: ...
 
     @abstractmethod
-    async def edit_file(self, path: str, target: str, replacement: str, count: int = 1) -> None:
-        ...
+    async def edit_file(self, path: str, target: str, replacement: str, count: int = 1) -> None: ...
 
     @abstractmethod
     async def exec_command(
@@ -66,20 +62,16 @@ class ExecutionEnv(ABC):
         command: str,
         timeout_ms: int = 30000,
         env_vars: dict[str, str] | None = None,
-    ) -> ExecResult:
-        ...
+    ) -> ExecResult: ...
 
     @abstractmethod
-    async def list_dir(self, path: str = ".", recursive: bool = False) -> list[FileInfo]:
-        ...
+    async def list_dir(self, path: str = ".", recursive: bool = False) -> list[FileInfo]: ...
 
     @abstractmethod
-    async def file_exists(self, path: str) -> bool:
-        ...
+    async def file_exists(self, path: str) -> bool: ...
 
     @abstractmethod
-    async def cleanup(self) -> None:
-        ...
+    async def cleanup(self) -> None: ...
 
     async def __aenter__(self) -> Self:
         return self
@@ -121,7 +113,7 @@ class LocalExecutionEnv(ExecutionEnv):
             except ValueError:
                 raise PathTraversalError(
                     f"Path '{path}' escapes working directory '{self._cwd}'"
-                )
+                ) from None
         return resolved
 
     async def read_file(self, path: str, offset: int = 0, limit: int | None = None) -> str:
@@ -214,7 +206,7 @@ class LocalExecutionEnv(ExecutionEnv):
                 pass
             raise CommandTimeoutError(
                 f"Command '{command}' timed out after {timeout_ms}ms"
-            )
+            ) from None
 
     async def list_dir(self, path: str = ".", recursive: bool = False) -> list[FileInfo]:
         resolved = self._resolve_safe_path(path)
@@ -266,7 +258,9 @@ class IsolatedSandboxEnv(LocalExecutionEnv):
         base_dir: Path | str | None = None,
         env_vars: dict[str, str] | None = None,
     ) -> None:
-        self._temp_dir: tempfile.TemporaryDirectory[str] | None = tempfile.TemporaryDirectory(dir=base_dir)
+        self._temp_dir: tempfile.TemporaryDirectory[str] | None = tempfile.TemporaryDirectory(
+            dir=base_dir
+        )
         super().__init__(
             cwd=Path(self._temp_dir.name),
             env_vars=env_vars,

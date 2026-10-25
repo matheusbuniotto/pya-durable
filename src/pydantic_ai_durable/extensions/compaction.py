@@ -2,7 +2,8 @@ import inspect
 import json
 import logging
 import uuid
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from pydantic_ai_durable.models import (
     DurableDocRecord,
@@ -50,7 +51,9 @@ class BackgroundCompactor:
                 conversation_id=conversation_id,
                 version=1,
                 doc_type="compaction",
-                data_json=json.dumps({"cutoff_entry_id": cutoff_id, "summary": f"Summary up to {cutoff_id}"}),
+                data_json=json.dumps(
+                    {"cutoff_entry_id": cutoff_id, "summary": f"Summary up to {cutoff_id}"}
+                ),
                 updated_at=utc_now_iso(),
             )
             await storage.upsert_durable_doc(doc_record)
@@ -93,7 +96,9 @@ class BackgroundCompactor:
             else:
                 summary_text = str(res)
         else:
-            summary_text = f"Compacted {len(compacted_entries)} transcript entries up to {cutoff_id}."
+            summary_text = (
+                f"Compacted {len(compacted_entries)} transcript entries up to {cutoff_id}."
+            )
 
         doc_record = DurableDocRecord(
             doc_id="compaction_summary",
