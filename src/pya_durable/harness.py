@@ -10,6 +10,7 @@ import aiosqlite
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 
+from pya_durable.approvals import ApprovalManager, ApprovalRequestRecord
 from pya_durable.branching import InvalidForkEntryError
 from pya_durable.compaction import BackgroundCompactor
 from pya_durable.docs import DocDefinition, DocumentManager
@@ -99,6 +100,10 @@ class DurableHarness(Generic[TOutput]):
     @property
     def env(self) -> ExecutionEnv:
         return self.get_conversation_env()
+
+    @property
+    def approvals(self) -> ApprovalManager:
+        return ApprovalManager(self.storage)
 
     def install_extension(self, ext: ExtensionDefinition) -> None:
         self.registry.install(ext)
@@ -218,6 +223,21 @@ class DurableHarness(Generic[TOutput]):
         status = "busy" if self._busy else "idle"
         clients = multiplayer_hub.get_connected_clients(self.conversation_id)
 
+        pending_records = await self.approvals.list_pending(self.conversation_id)
+        pending_approvals = [
+            {
+                "challenge_token": p.challenge_token,
+                "task_id": p.task_id,
+                "tool_name": p.tool_name,
+                "args": json.loads(p.args_json) if isinstance(p.args_json, str) else p.args_json,
+                "prompt_message": p.prompt_message,
+                "status": p.status.value if hasattr(p.status, "value") else str(p.status),
+                "created_at": p.created_at,
+                "expires_at": p.expires_at,
+            }
+            for p in pending_records
+        ]
+
         snapshot = ConversationViewState(
             conversation_id=self.conversation_id,
             status=status,
@@ -225,6 +245,7 @@ class DurableHarness(Generic[TOutput]):
             entries=formatted_entries,
             docs=docs_dict,
             connected_clients=clients,
+            pending_approvals=pending_approvals,
             version=1,
         )
         rv = ReactiveViewState(snapshot)
@@ -260,6 +281,21 @@ class DurableHarness(Generic[TOutput]):
         status = "busy" if self._busy else "idle"
         clients = multiplayer_hub.get_connected_clients(self.conversation_id)
 
+        pending_records = await self.approvals.list_pending(self.conversation_id)
+        pending_approvals = [
+            {
+                "challenge_token": p.challenge_token,
+                "task_id": p.task_id,
+                "tool_name": p.tool_name,
+                "args": json.loads(p.args_json) if isinstance(p.args_json, str) else p.args_json,
+                "prompt_message": p.prompt_message,
+                "status": p.status.value if hasattr(p.status, "value") else str(p.status),
+                "created_at": p.created_at,
+                "expires_at": p.expires_at,
+            }
+            for p in pending_records
+        ]
+
         for rv in list(views):
             new_state = ConversationViewState(
                 conversation_id=self.conversation_id,
@@ -268,6 +304,7 @@ class DurableHarness(Generic[TOutput]):
                 entries=formatted_entries,
                 docs=docs_dict,
                 connected_clients=clients,
+                pending_approvals=pending_approvals,
                 version=rv.value.version + 1,
             )
             rv.notify(new_state)
@@ -362,20 +399,33 @@ class DurableHarness(Generic[TOutput]):
 
             self.current_leaf_entry_id = turn_result.leaf_entry_id
 
-            stream_hub.publish(
-                self.conversation_id,
-                StreamEvent(
-                    conversation_id=self.conversation_id,
-                    event_type="turn_completed",
-                    data={
-                        "output": turn_result.output,
-                        "token_usage": turn_result.token_usage,
-                    },
-                ),
-            )
+            if turn_result.waiting_approval:
+                stream_hub.publish(
+                    self.conversation_id,
+                    StreamEvent(
+                        conversation_id=self.conversation_id,
+                        event_type="approval_requested",
+                        data={
+                            "challenge_token": turn_result.challenge_token,
+                            "task_id": task_id,
+                        },
+                    ),
+                )
+            else:
+                stream_hub.publish(
+                    self.conversation_id,
+                    StreamEvent(
+                        conversation_id=self.conversation_id,
+                        event_type="turn_completed",
+                        data={
+                            "output": turn_result.output,
+                            "token_usage": turn_result.token_usage,
+                        },
+                    ),
+                )
             await self.refresh_view_states()
 
-            if self.auto_compact and BackgroundCompactor.should_compact(
+            if not turn_result.waiting_approval and self.auto_compact and BackgroundCompactor.should_compact(
                 turn_result.token_usage.get("total_tokens", 0),
                 threshold=self.compaction_threshold,
             ):
@@ -385,7 +435,7 @@ class DurableHarness(Generic[TOutput]):
                     turn_result.leaf_entry_id,
                 )
 
-            if request_id:
+            if request_id and not turn_result.waiting_approval:
                 out_str = (
                     turn_result.output.model_dump_json()
                     if hasattr(turn_result.output, "model_dump_json")
@@ -405,6 +455,39 @@ class DurableHarness(Generic[TOutput]):
         finally:
             self._busy = False
             await self.refresh_view_states()
+
+    async def resolve_approval(
+        self,
+        challenge_token: str,
+        approved: bool,
+        reason: str = "",
+        override_args: dict[str, Any] | None = None,
+        approver: str = "operator",
+    ) -> ApprovalRequestRecord:
+        rec = await self.approvals.resolve(
+            challenge_token=challenge_token,
+            approved=approved,
+            reason=reason,
+            override_args=override_args,
+            approver=approver,
+        )
+        await self.refresh_view_states()
+        return rec
+
+    async def list_pending_approvals(self) -> list[ApprovalRequestRecord]:
+        return await self.approvals.list_pending(self.conversation_id)
+
+    async def wait_for_approval(
+        self,
+        challenge_token: str,
+        poll_interval: float = 0.05,
+        timeout: float | None = None,
+    ) -> ApprovalRequestRecord:
+        return await self.approvals.wait_for_resolution(
+            challenge_token=challenge_token,
+            poll_interval=poll_interval,
+            timeout=timeout,
+        )
 
     async def submit(
         self,

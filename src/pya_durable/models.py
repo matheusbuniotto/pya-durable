@@ -9,6 +9,7 @@ EntryId = NewType("EntryId", str)
 InvocationId = NewType("InvocationId", str)
 RequestId = NewType("RequestId", str)
 DocId = NewType("DocId", str)
+ChallengeToken = NewType("ChallengeToken", str)
 
 
 def utc_now_iso() -> str:
@@ -34,6 +35,14 @@ class ToolInvocationStatus(str, Enum):
     COMPLETED = "completed"
     INTERRUPTED = "interrupted"
     FAILED = "failed"
+    DEFERRED = "deferred"
+
+
+class ApprovalStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
 
 
 class SubmissionStatus(str, Enum):
@@ -137,4 +146,30 @@ class MemoRecord(BaseModel):
     key: str
     value_json: str
     created_at: str = Field(default_factory=utc_now_iso)
+
+
+class ApprovalDecision(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    status: ApprovalStatus
+    approver: str = "operator"
+    reason: str = ""
+    override_args_json: str | None = None
+    resolved_at: str = Field(default_factory=utc_now_iso)
+
+
+class ApprovalRequestRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    challenge_token: str
+    task_id: str
+    conversation_id: str
+    tool_name: str
+    args_json: str
+    prompt_message: str
+    status: ApprovalStatus = ApprovalStatus.PENDING
+    decision_json: str | None = None
+    created_at: str = Field(default_factory=utc_now_iso)
+    resolved_at: str | None = None
+    expires_at: str | None = None
 

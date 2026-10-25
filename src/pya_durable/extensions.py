@@ -12,6 +12,8 @@ logger = logging.getLogger("pya_durable.extensions")
 class HookDecision:
     block: str | None = None
     modified_args: dict[str, Any] | None = None
+    require_approval: bool = False
+    approval_prompt: str | None = None
 
 
 @dataclass
@@ -234,6 +236,8 @@ class ExtensionRegistry:
                         if isinstance(res, HookDecision):
                             if res.block is not None:
                                 return res
+                            if res.require_approval:
+                                return res
                             if res.modified_args is not None:
                                 call_info.args = res.modified_args
                                 current_decision = res
@@ -256,6 +260,8 @@ class ExtensionRegistry:
                         res = hook_item.before_tool(call_info, context)
                         if isinstance(res, HookDecision):
                             if res.block is not None:
+                                return res
+                            if res.require_approval:
                                 return res
                             if res.modified_args is not None:
                                 call_info.args = res.modified_args

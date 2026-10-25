@@ -9,6 +9,8 @@ from typing import Any, AsyncIterator
 import aiosqlite
 
 from pya_durable.models import (
+    ApprovalRequestRecord,
+    ApprovalStatus,
     ConversationRecord,
     DurableDocRecord,
     MemoRecord,
@@ -124,6 +126,25 @@ CREATE TABLE IF NOT EXISTS memos (
 );
 
 CREATE INDEX IF NOT EXISTS idx_memos_conv ON memos(conversation_id);
+
+CREATE TABLE IF NOT EXISTS approvals (
+    challenge_token TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL,
+    conversation_id TEXT NOT NULL,
+    tool_name TEXT NOT NULL,
+    args_json TEXT NOT NULL,
+    prompt_message TEXT NOT NULL,
+    status TEXT NOT NULL,
+    decision_json TEXT,
+    created_at TEXT NOT NULL,
+    resolved_at TEXT,
+    expires_at TEXT,
+    FOREIGN KEY(task_id) REFERENCES tasks(task_id),
+    FOREIGN KEY(conversation_id) REFERENCES conversations(conversation_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_approvals_conv ON approvals(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);
 """
 
 
@@ -401,6 +422,50 @@ class DurableStorage(ABC):
         key: str,
         conn: Any = None,
     ) -> bool:
+        pass
+
+    @abstractmethod
+    async def insert_approval_request(
+        self,
+        record: ApprovalRequestRecord,
+        conn: Any = None,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def get_approval_request(
+        self,
+        challenge_token: str,
+        conn: Any = None,
+    ) -> ApprovalRequestRecord | None:
+        pass
+
+    @abstractmethod
+    async def get_approval_by_task_and_tool(
+        self,
+        task_id: str,
+        tool_name: str,
+        conn: Any = None,
+    ) -> ApprovalRequestRecord | None:
+        pass
+
+    @abstractmethod
+    async def list_pending_approvals(
+        self,
+        conversation_id: str | None = None,
+        conn: Any = None,
+    ) -> list[ApprovalRequestRecord]:
+        pass
+
+    @abstractmethod
+    async def resolve_approval_request(
+        self,
+        challenge_token: str,
+        status: ApprovalStatus,
+        decision_json: str | None = None,
+        resolved_at: str | None = None,
+        conn: Any = None,
+    ) -> ApprovalRequestRecord | None:
         pass
 
     async def checkpoint(self) -> tuple[int, int, int]:
@@ -1221,6 +1286,163 @@ class AioSqliteStorage(DurableStorage):
             (conversation_id, key),
         ) as cursor:
             return cursor.rowcount > 0
+
+    async def insert_approval_request(
+        self,
+        record: ApprovalRequestRecord,
+        conn: aiosqlite.Connection | None = None,
+    ) -> None:
+        target = conn or await self.get_connection()
+        await target.execute(
+            """
+            INSERT INTO approvals (
+                challenge_token, task_id, conversation_id, tool_name,
+                args_json, prompt_message, status, decision_json,
+                created_at, resolved_at, expires_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                record.challenge_token,
+                record.task_id,
+                record.conversation_id,
+                record.tool_name,
+                record.args_json,
+                record.prompt_message,
+                record.status.value,
+                record.decision_json,
+                record.created_at,
+                record.resolved_at,
+                record.expires_at,
+            ),
+        )
+
+    async def get_approval_request(
+        self,
+        challenge_token: str,
+        conn: aiosqlite.Connection | None = None,
+    ) -> ApprovalRequestRecord | None:
+        target = conn or await self.get_connection()
+        async with target.execute(
+            """
+            SELECT challenge_token, task_id, conversation_id, tool_name,
+                   args_json, prompt_message, status, decision_json,
+                   created_at, resolved_at, expires_at
+            FROM approvals
+            WHERE challenge_token = ?
+            """,
+            (challenge_token,),
+        ) as cursor:
+            row = await cursor.fetchone()
+            if row is None:
+                return None
+            return ApprovalRequestRecord(
+                challenge_token=row[0],
+                task_id=row[1],
+                conversation_id=row[2],
+                tool_name=row[3],
+                args_json=row[4],
+                prompt_message=row[5],
+                status=ApprovalStatus(row[6]),
+                decision_json=row[7],
+                created_at=row[8],
+                resolved_at=row[9],
+                expires_at=row[10],
+            )
+
+    async def get_approval_by_task_and_tool(
+        self,
+        task_id: str,
+        tool_name: str,
+        conn: aiosqlite.Connection | None = None,
+    ) -> ApprovalRequestRecord | None:
+        target = conn or await self.get_connection()
+        async with target.execute(
+            """
+            SELECT challenge_token, task_id, conversation_id, tool_name,
+                   args_json, prompt_message, status, decision_json,
+                   created_at, resolved_at, expires_at
+            FROM approvals
+            WHERE task_id = ? AND tool_name = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (task_id, tool_name),
+        ) as cursor:
+            row = await cursor.fetchone()
+            if row is None:
+                return None
+            return ApprovalRequestRecord(
+                challenge_token=row[0],
+                task_id=row[1],
+                conversation_id=row[2],
+                tool_name=row[3],
+                args_json=row[4],
+                prompt_message=row[5],
+                status=ApprovalStatus(row[6]),
+                decision_json=row[7],
+                created_at=row[8],
+                resolved_at=row[9],
+                expires_at=row[10],
+            )
+
+    async def list_pending_approvals(
+        self,
+        conversation_id: str | None = None,
+        conn: aiosqlite.Connection | None = None,
+    ) -> list[ApprovalRequestRecord]:
+        target = conn or await self.get_connection()
+        query = """
+            SELECT challenge_token, task_id, conversation_id, tool_name,
+                   args_json, prompt_message, status, decision_json,
+                   created_at, resolved_at, expires_at
+            FROM approvals
+            WHERE status = ?
+        """
+        params: list[Any] = [ApprovalStatus.PENDING.value]
+        if conversation_id is not None:
+            query += " AND conversation_id = ?"
+            params.append(conversation_id)
+        query += " ORDER BY created_at ASC"
+
+        async with target.execute(query, tuple(params)) as cursor:
+            rows = await cursor.fetchall()
+            return [
+                ApprovalRequestRecord(
+                    challenge_token=row[0],
+                    task_id=row[1],
+                    conversation_id=row[2],
+                    tool_name=row[3],
+                    args_json=row[4],
+                    prompt_message=row[5],
+                    status=ApprovalStatus(row[6]),
+                    decision_json=row[7],
+                    created_at=row[8],
+                    resolved_at=row[9],
+                    expires_at=row[10],
+                )
+                for row in rows
+            ]
+
+    async def resolve_approval_request(
+        self,
+        challenge_token: str,
+        status: ApprovalStatus,
+        decision_json: str | None = None,
+        resolved_at: str | None = None,
+        conn: aiosqlite.Connection | None = None,
+    ) -> ApprovalRequestRecord | None:
+        target = conn or await self.get_connection()
+        ts = resolved_at or utc_now_iso()
+        await target.execute(
+            """
+            UPDATE approvals
+            SET status = ?, decision_json = ?, resolved_at = ?
+            WHERE challenge_token = ?
+            """,
+            (status.value, decision_json, ts, challenge_token),
+        )
+        return await self.get_approval_request(challenge_token, conn=target)
 
 
 from pya_durable.memory_storage import MemoryStorage
