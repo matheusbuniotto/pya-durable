@@ -498,6 +498,56 @@ Decoupled execution environments for conversation-scoped filesystem and process 
 
 - [x] Copy lane 1 screenshots into `docs/media/pr-08-review-execution-env.png`.
 
+### PR-09. Real-time multiplayer synchronization, reactive view state, high-level agent event streams, and durable task memoization
+
+Live multi-client observation and steering, reactive snapshot subscriptions, high-level agent event adapters for external TUIs/dashboards, observable document state, presence rosters, and crash-resilient task memoization with first-write-wins semantics.
+
+**Design data shape first.** Model streaming and memo entities in `src/pya_durable/streaming.py`, `src/pya_durable/memo.py`, and `src/pya_durable/models.py`.
+
+- [x] High-level agent events: `AgentEvent`, `TurnStartedEvent`, `ModelRequestStartedEvent`, `ModelDeltaEvent`, `ToolCallStartedEvent`, `ToolCallCompletedEvent`, `DocUpdatedEvent`, `SteerInjectedEvent`, `TurnCompletedEvent`, `ErrorEvent`, `ClientPresenceEvent`.
+- [x] Reactive view state: `ConversationViewState` snapshot dataclass and `ReactiveViewState` observable with `.value`, `.subscribe()`, and `.watch()`.
+- [x] Reactive document state: `ReactiveDocumentState` observable with live mutation callbacks.
+- [x] Multiplayer presence: `MultiplayerPresenceHub` with conversation-isolated client join/leave tracking.
+- [x] Durable memoization: `MemoRecord` model, SQLite `memos` table with unique constraint, and `MemoManager.memo()` enforcing first-write-wins across restarts.
+- [x] Harness integration: `DurableHarness` and `DurableConversation` expose `view_state()`, `watch_events()`, `document_state()`, `connect_client()`, `disconnect_client()`, and `memo()`.
+
+**Verify, unit.** Run `uv run pytest tests/test_multiplayer_and_view_state.py`.
+
+- [x] Durable memo first-write-wins idempotency.
+- [x] Durable memo persistence across storage reopen and process restarts.
+- [x] Initial view state snapshot retrieval with transcript, documents, and presence.
+- [x] Reactive view state subscription with live turn updates and version incrementation.
+- [x] Async stream iteration over `view_state.watch()` receiving sequential deltas.
+- [x] High-level agent event translation emitting `TurnStartedEvent` and `TurnCompletedEvent`.
+- [x] Reactive document state (`document_state`) subscription receiving live mutation deltas.
+- [x] Multiplayer presence tracking with client join/leave events and presence queries.
+- [x] Presence isolation ensuring distinct client rosters across concurrent conversations.
+- [x] Conversation view state propagation across transcript forks.
+- [x] Fault-isolated subscriber handling preventing crashing client listeners from disrupting turn execution.
+
+**Verify, live.** Run `uv run python scripts/verify_pr09.py`.
+
+- [x] Lane 1. Initial snapshot retrieval across active conversation with transcript, documents, and presence. Save `lane-1-view-snapshot.png`.
+- [x] Lane 2. Reactive view subscription with live turn updates and version incrementation. Save `lane-2-reactive-view.png`.
+- [x] Lane 3. Async stream iteration over `view_state.watch()` receiving sequential deltas. Save `lane-3-watch-stream.png`.
+- [x] Lane 4. High-level agent event translation emitting `TurnStartedEvent` and `TurnCompletedEvent`. Save `lane-4-agent-events.png`.
+- [x] Lane 5. Tool execution event translation emitting `ToolCallStartedEvent` and `ToolCallCompletedEvent`. Save `lane-5-tool-events.png`.
+- [x] Lane 6. Reactive document state (`document_state`) subscription receiving live mutation deltas. Save `lane-6-doc-state.png`.
+- [x] Lane 7. Multiplayer presence tracking with client join/leave events and presence queries. Save `lane-7-presence-hub.png`.
+- [x] Lane 8. Presence isolation ensuring distinct client rosters across concurrent conversations. Save `lane-8-presence-isolation.png`.
+- [x] Lane 9. Durable task memoization (`api.memo`) enforcing atomic first-write-wins across restarts. Save `lane-9-durable-memo.png`.
+- [x] Lane 10. Fault-isolated subscriber handling preventing crashing client listeners from disrupting turn execution. Save `lane-10-subscriber-isolation.png`.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [x] Metric. Combined reactive view state dispatch, presence update, and SQLite memo read across 100 operations.
+- [x] Probe. Execute 100 sequential view state notifications, presence connections, and cached memo queries.
+- [x] Rule. Total elapsed time under 15.00 ms (measured 7.33 ms).
+
+**Review gate.** Review card artifact saved. No video required for non-UI headless capability.
+
+- [x] Copy lane 1 screenshots into `docs/media/pr-09-review-multiplayer-streaming.png`.
+
 ## Close the program
 
 - [x] Every box above is checked with its evidence.
