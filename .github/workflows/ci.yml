@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - run: uv run --with ruff ruff check . --output-format github
@@ -28,7 +28,7 @@ jobs:
         python: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - run: uv run --python ${{ matrix.python }} --extra dev --with pytest-cov pytest --cov=src --cov-report=term-missing --cov-fail-under=70
@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
       - name: Audit dependencies
         run: uv export --no-hashes --no-emit-project -o requirements.txt -q && uvx pip-audit -r requirements.txt --no-deps --disable-pip
       - name: Bandit
@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
       - run: uv build
       - run: uvx twine check dist/*
       - run: uv venv /tmp/v && uv pip install -p /tmp/v dist/*.whl && /tmp/v/bin/python -c "import pydantic_ai_durable, pya_durable"
