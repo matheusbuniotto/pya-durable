@@ -101,19 +101,21 @@ async def eval_1_multi_turn_memory(agent: Agent, model_name: str, temp_dir: str)
 
     is_fallback = "test:" in model_name
     if is_fallback:
-        agent.model = TestModel(custom_output_text="Your project is Aethelgard and secret is SILVER-FOX-99.")
+        agent.model = TestModel(custom_output_text="Your project is Aethelgard and deployment target region is SILVER-FOX-99.")
 
     async with AioSqliteStorage(db_path) as storage:
         harness = DurableHarness(agent, storage, conversation_id="conv-eval1")
 
         # Turn 1: Seed conversational memory
-        print("-> User Turn 1: 'My project is Aethelgard and secret code is SILVER-FOX-99. Acknowledge.'")
-        r1 = await harness.run("My project is Aethelgard and secret code is SILVER-FOX-99. Acknowledge.")
+        prompt_1 = "My project is Aethelgard and deployment target region is SILVER-FOX-99. Acknowledge."
+        print(f"-> User Turn 1: '{prompt_1}'")
+        r1 = await harness.run(prompt_1)
         print(f"<- Model Turn 1: {r1.output}")
 
         # Turn 2: Query memory
-        print("-> User Turn 2: 'What is my project name and secret code?'")
-        r2 = await harness.run("What is my project name and secret code?")
+        prompt_2 = "What is my project name and deployment target region?"
+        print(f"-> User Turn 2: '{prompt_2}'")
+        r2 = await harness.run(prompt_2)
         print(f"<- Model Turn 2: {r2.output}")
 
         transcript = await storage.get_conversation_transcript("conv-eval1")

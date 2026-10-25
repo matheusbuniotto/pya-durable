@@ -69,18 +69,18 @@ class SimulatedHostCrash(BaseException):
 async def test_eval_1_multi_turn_memory(tmp_path: Path) -> None:
     db_path = str(tmp_path / "eval1.sqlite")
     agent, _model_name = get_eval_agent(
-        fallback_text="Your project is Aethelgard and secret is SILVER-FOX-99."
+        fallback_text="Your project is Aethelgard and deployment target region is SILVER-FOX-99."
     )
 
     async with AioSqliteStorage(db_path) as storage:
         harness = DurableHarness(agent, storage, conversation_id="conv-eval1")
 
         # Turn 1
-        r1 = await harness.run("My project is Aethelgard and secret code is SILVER-FOX-99. Acknowledge.")
+        r1 = await harness.run("My project is Aethelgard and deployment target region is SILVER-FOX-99. Acknowledge.")
         assert r1 is not None
 
         # Turn 2: Query memory
-        r2 = await harness.run("What is my project name and secret code?")
+        r2 = await harness.run("What is my project name and deployment target region?")
         assert r2 is not None
 
         transcript = await storage.get_conversation_transcript("conv-eval1")
