@@ -102,6 +102,12 @@ class DurableConversation:
     def approvals(self) -> ApprovalManager:
         return ApprovalManager(self.storage)
 
+    def enqueue_steering(self, message: str) -> None:
+        global_steering_queue.enqueue(self.conversation_id, message)
+
+    def steer(self, message: str) -> None:
+        global_steering_queue.enqueue(self.conversation_id, message)
+
     async def _ensure_conversation(self) -> None:
         if not self._initialized:
             await self.storage.init_db()

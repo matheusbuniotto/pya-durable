@@ -105,6 +105,12 @@ class DurableHarness(Generic[TOutput]):
     def approvals(self) -> ApprovalManager:
         return ApprovalManager(self.storage)
 
+    def enqueue_steering(self, message: str) -> None:
+        global_steering_queue.enqueue(self.conversation_id, message)
+
+    def steer(self, message: str) -> None:
+        global_steering_queue.enqueue(self.conversation_id, message)
+
     def install_extension(self, ext: ExtensionDefinition) -> None:
         self.registry.install(ext)
 
