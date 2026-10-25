@@ -1,13 +1,223 @@
-# pydantic-ai-durable
+# ⚡ pydantic-ai-durable
 
-**Crash-resilient, durable agent harness for [PydanticAI](https://github.com/pydantic/pydantic-ai).**  
-Inspired by Earendil's [Pi Durable](https://github.com/earendil-works) architectural framework.
+> **Crash-proof, stateful, and malleable agents for [PydanticAI](https://github.com/pydantic/pydantic-ai).**  
+> Complete Python implementation of Earendil's [@earendil-works/pi-durable](https://github.com/earendil-works) architecture.
 
 ---
 
-Traditional AI agent loops die when a process restarts, crashes, or hits an unhandled exception. State is lost, long-running tool runs disappear, and resuming requires either starting from scratch or re-executing expensive external side-effects.
+### 🧠 The Problem vs The Fix
 
-`pydantic-ai-durable` turns PydanticAI agents into crash-proof, stateful state machines. Every model turn, tool call, context compaction, and multi-step business workflow is an atomic, checkpointed task backed by SQLite WAL (or zero-disk in-memory storage, or append-only JSONL ledgers).
+| Without pydantic-ai-durable 💥 | With pydantic-ai-durable 🛡️ |
+| :--- | :--- |
+| **Process restarts or crashes?** Everything is lost. | **Turns auto-resume** from their last checkpoint. |
+| **Crashes during a tool call?** Retrying double-charges cards. | **Replay safety:** Safe tools re-fetch; mutating tools never duplicate. |
+| **Exploring "what-if" speculations?** Re-run entire history. | **Fork instantly** in `O(1)` without copying database rows. |
+| **Distributed multi-step task fails?** Dirty resources leaked. | **Durable Sagas:** Automatic reverse rollback compensation. |
+| **AI wants to run a risky action?** Hard to intercept cleanly. | **Approval Gates:** Pauses run for human review & argument override. |
+
+---
+
+## 🚀 30-Second Quickstart
+
+```bash
+pip install pydantic-ai-durable
+```
+
+Both package imports work interchangeably:
+```python
+import pydantic_ai_durable as pad
+# or
+import pya_durable as pad
+```
+
+### Complete Bootstrap in 15 Lines
+
+```python
+import asyncio
+from pydantic_ai_durable import (
+    Harness,
+    SqliteStorage,
+    create_models,
+    openrouter_provider,
+)
+
+async def main():
+    # 1. Pluggable Auth & Providers (OpenRouter, OpenAI, Anthropic, Gemini, Groq, Ollama)
+    models = create_models()
+    models.set_provider(openrouter_provider(api_key="sk-or-..."))
+    # or models.set_provider("openai", api_key="sk-...")
+
+    # 2. Open durable harness over SQLite WAL storage
+    harness = await Harness.open(SqliteStorage("agent.db"), models=models)
+
+    # 3. Resume any unfinished work from previous runs
+    await harness.resume()
+
+    # 4. Open root channel (shortcuts like "gpt-luna 6", dict specs, or Agent instances)
+    root = await harness.root({"agent": {"model": "openrouter:openai/gpt-6-luna"}})
+
+    # 5. Submit with idempotent requestId (safe against network retries)
+    result = await root.submit({"content": "Audit cluster health", "requestId": "job-001"})
+    print("Agent:", result.output)
+
+    await harness.close()
+
+asyncio.run(main())
+```
+
+---
+
+## 🎯 Cheat Sheet: Which Feature Do I Need?
+
+| If you want to... | Use this | What it does |
+| :--- | :--- | :--- |
+| **Prevent double-charging on crash** | `@durable_tool(replay="unsafe")` | Halts duplicate runs; preserves partial output |
+| **Auto-rerun safe lookups on crash** | `@durable_tool(replay="safe")` | Re-runs read-only tools without user prompt |
+| **Ask a human before dropping a table** | `@approval_gate` | Pauses turn, generates challenge token |
+| **Roll back multi-step cloud steps** | `@define_saga` | Fan-out child tasks + reverse rollback |
+| **Branch into a "what-if" experiment** | `conv.fork()` | Zero-copy transcript DAG off any message |
+| **Inject mid-turn steering message** | `harness.steer("...")` | Prioritizes instructions in next step |
+| **Build a live dashboard or TUI** | `harness.view_state()` | Emits real-time reactive transcript & tasks |
+| **Store shared typed state** | `define_doc(...)` | Atomic document state alongside transcript |
+
+---
+
+## 🧱 Core Patterns (Copy & Paste)
+
+### 1. 🛡️ Durable Tools: Safe Replay vs Unsafe Mutating Guard
+
+Declare tool replay safety so crashes never cause accidental side-effects:
+
+```python
+from pydantic_ai_durable import durable_tool, set_tool_partial_output
+
+# SAFE: Read-only operations automatically rerun on crash recovery
+@durable_tool(replay="safe")
+async def search_database(query: str) -> str:
+    return f"Results for: {query}"
+
+# UNSAFE: Mutating calls are NEVER repeated automatically
+@durable_tool(replay="unsafe")
+async def charge_customer(amount: int, customer_id: str) -> str:
+    set_tool_partial_output("Connecting to payment gateway...")
+    # charge logic...
+    return f"Charged ${amount} to {customer_id}"
+```
+
+---
+
+### 2. ⏸️ Human Approval Gates & Argument Overrides
+
+Pause turn execution for sensitive operations and wait for human operator intervention:
+
+```python
+from pydantic_ai_durable import approval_gate, DurableHarness
+
+# Intercept sensitive actions and generate challenge token
+@approval_gate(description="Approve database migration on production")
+async def drop_production_table(table_name: str) -> str:
+    return f"Dropped {table_name}"
+
+# The agent turn pauses with TaskStatus.WAITING ("waiting_approval").
+# External operator reviews challenge token and approves (with optional argument rewrite):
+await harness.resolve_approval(
+    token=challenge_token,
+    approved=True,
+    override_args={"table_name": "users_backup"},  # Redirect to safe table
+)
+```
+
+---
+
+### 3. 🔁 Durable Task Sagas with Reverse Compensation
+
+Orchestrate complex distributed workflows with parallel fan-out and automatic reverse rollback:
+
+```python
+from pydantic_ai_durable import define_saga, SagaContext, SagaResult, SagaPolicy
+
+@define_saga(name="cloud.provision_cluster", initial_step="reserve_nodes")
+class ProvisionClusterSaga:
+    async def reserve_nodes(self, ctx: SagaContext) -> SagaResult:
+        # Parallel fan-out across multiple child tasks
+        w1 = await ctx.spawn_child("cloud.reserve", {"type": "gpu-h100"})
+        w2 = await ctx.spawn_child("cloud.reserve", {"type": "cpu-m6i"})
+        
+        # Await with fail-fast cascade
+        await ctx.wait_for_children(policy=SagaPolicy.FAIL_FAST)
+        return ctx.transition_to("configure_network")
+
+    async def configure_network(self, ctx: SagaContext) -> SagaResult:
+        # If this step raises an error, compensate_reserve_nodes runs automatically!
+        ctx.state["cluster_ready"] = True
+        return ctx.complete(result="Cluster active")
+
+    async def compensate_reserve_nodes(self, ctx: SagaContext) -> None:
+        # Releases reserved compute instances bottom-up
+        print("Rollback: Releasing reserved nodes...")
+```
+
+---
+
+### 4. 🌲 Zero-Copy Transcript Branching (Forking)
+
+Branch a conversation off any historical message in `O(1)` time without duplicating database rows:
+
+```python
+# Fork off specific answer entry
+thread = await conv.fork(
+    entry_id=entry.entry_id,
+    new_conversation_id="conv-speculation-1",
+)
+
+# Both proceed concurrently with zero interference
+await asyncio.gather(
+    conv.run("Proceed with standard rollout"),
+    thread.run("What happens if we roll back immediately?"),
+)
+```
+
+---
+
+### 5. 👥 Real-Time Multiplayer Streaming & View State
+
+Connect TUIs, web dashboards, and mobile clients with reactive state subscriptions:
+
+```python
+# Obtain reactive view state observable
+view = await harness.view_state()
+print("Current turn count:", len(view.value.transcript))
+
+# Subscribe to real-time incremental updates
+unsubscribe = view.subscribe(lambda state: print("Updated active tasks:", state.active_tasks))
+
+# Or consume high-level agent event stream
+async for event in harness.watch_events():
+    print(f"[{event.event_type}] {event.payload}")
+```
+
+---
+
+### 6. 🗄️ Pluggable Storage Backends
+
+Switch backends effortlessly based on your deployment tier:
+
+```python
+from pydantic_ai_durable import SqliteStorage, MemoryStorage, JsonlStorage
+
+# 1. Production SQLite with WAL mode (Recommended default)
+storage = SqliteStorage("agent.sqlite")
+
+# 2. Zero-disk in-memory storage for lightning-fast tests
+test_storage = MemoryStorage()
+
+# 3. Append-only JSONL ledgers for streaming audit logs
+audit_storage = JsonlStorage("audit_trail.jsonl")
+```
+
+---
+
+## 🏛️ Architecture
 
 ```
                       ┌────────────────────────────────────────────────────────┐
@@ -36,236 +246,15 @@ Traditional AI agent loops die when a process restarts, crashes, or hits an unha
 
 ---
 
-## Highlights
+## ⚖️ Full Pi Durable Parity Table
 
-- **Crash Resilience & Resumption:** Interrupted turns automatically resume on restart.
-- **Durable Tool Replay:** Safe read-only tools re-execute automatically; mutating tools never repeat destructively and preserve partial output.
-- **Hierarchical Tasks & Subagents:** Recursive task trees with bottom-up abort cascades and crash-safe subagents.
-- **O(1) Transcript Branching:** Fork conversations at any message without copying history via content-addressed parent-pointer trees.
-- **Durable Task Sagas:** Declarative multi-step workflows with parallel fan-out (`failFast` / `allSettled`) and automatic reverse-order compensation rollback.
-- **Human Approval Gates:** Challenge tokens for sensitive operations with out-of-band resolution, parameter overrides, and dynamic deadlines.
-- **Pluggable Storage:** Production SQLite WAL, zero-disk `MemoryStorage` for tests, and append-only `JsonlStorage` for audit ledgers.
-- **Real-Time Multiplayer:** Observable reactive view states (`view_state`), presence rosters, and streaming agent event feeds.
-- **Durable Documents:** Shared typed state (`define_doc`) mutated atomically alongside message transcripts.
-- **Execution Environments:** Sandboxed workspaces (`LocalExecutionEnv`, `IsolatedSandboxEnv`) with path-traversal containment.
-
----
-
-## Installation
-
-```bash
-pip install pydantic-ai-durable
-```
-
-Both package names are supported:
-```python
-import pydantic_ai_durable as pad
-# or
-import pya_durable as pad
-```
-
----
-
-## Quickstart
-
-### 1. Pluggable Providers & Auth (Pi Durable Style)
-
-Easily configure credentials for OpenRouter, OpenAI, Anthropic, Gemini, Groq, or local Ollama, matching Pi Durable's clean decoupled architecture:
-
-```python
-import asyncio
-from pydantic_ai_durable import (
-    Harness,
-    SqliteStorage,
-    create_models,
-    openrouter_provider,
-    openai_provider,
-)
-
-async def main():
-    # 1. Configure pluggable providers & credentials (matching Pi Durable)
-    models = create_models()
-    models.set_provider(openrouter_provider(api_key="sk-or-..."))
-    # or models.set_provider("openai", api_key="sk-...")
-
-    # 2. Open durable harness over SQLite
-    harness = await Harness.open(SqliteStorage("agent.sqlite"), models=models)
-
-    # 3. Resume any interrupted tasks
-    await harness.resume()
-
-    # 4. Open root conversation with flexible model resolution
-    root = await harness.root({"agent": {"model": "openrouter:openai/gpt-6-luna"}})
-    # shortcuts also supported: agent="gpt-luna 6", agent="openai:gpt-4o", or Agent(...)
-
-    # 5. Submit turn with idempotent request_id
-    result = await root.submit({"content": "Summarize deployment health", "requestId": "req-001"})
-    print("Agent:", result.output)
-
-    # Clean shutdown
-    await harness.close()
-
-asyncio.run(main())
-```
-
----
-
-### 2. Minimal Standalone Agent Harness
-
-```python
-import asyncio
-from pydantic_ai import Agent
-from pydantic_ai_durable import DurableHarness, SqliteStorage
-
-async def main():
-    agent = Agent("openai:gpt-4o")
-
-    async with SqliteStorage("agent.sqlite") as storage:
-        # Create or resume harness
-        harness = DurableHarness(
-            agent=agent,
-            storage=storage,
-            conversation_id="conv-main",
-        )
-
-        # Run with idempotent request_id
-        result = await harness.run(
-            "Summarize the latest deployment status.",
-            request_id="req-status-001",
-        )
-        print("Agent:", result.output)
-
-asyncio.run(main())
-```
-
----
-
-### 3. Durable Tools with Replay Policies
-
-Declare tool replay safety to protect mutating operations from re-executing after a crash:
-
-```python
-from pydantic_ai_durable import durable_tool, set_tool_partial_output
-
-# SAFE: Read-only operations automatically rerun on crash recovery
-@durable_tool(replay="safe")
-async def search_database(query: str) -> str:
-    return f"Results for: {query}"
-
-# UNSAFE: Mutating calls are NEVER repeated automatically
-@durable_tool(replay="unsafe")
-async def charge_customer(amount: int, customer_id: str) -> str:
-    set_tool_partial_output("Connecting to payment gateway...")
-    # charge logic...
-    return f"Charged ${amount} to {customer_id}"
-```
-
----
-
-### 4. Durable Task Sagas with Reverse Compensation
-
-Orchestrate complex distributed workflows with parallel fan-out and automatic reverse rollback:
-
-```python
-from pydantic_ai_durable import define_saga, SagaContext, SagaResult, SagaPolicy
-
-@define_saga(name="cloud.provision_cluster", initial_step="reserve_nodes")
-class ProvisionClusterSaga:
-    async def reserve_nodes(self, ctx: SagaContext) -> SagaResult:
-        # Parallel fan-out across multiple child tasks
-        w1 = await ctx.spawn_child("cloud.reserve", {"type": "gpu-h100"})
-        w2 = await ctx.spawn_child("cloud.reserve", {"type": "cpu-m6i"})
-        
-        # Await with fail-fast cascade
-        await ctx.wait_for_children(policy=SagaPolicy.FAIL_FAST)
-        return ctx.transition_to("configure_network")
-
-    async def configure_network(self, ctx: SagaContext) -> SagaResult:
-        # If this step raises an error, reserve_nodes compensation executes!
-        ctx.state["cluster_ready"] = True
-        return ctx.complete(result="Cluster active")
-
-    async def compensate_reserve_nodes(self, ctx: SagaContext) -> None:
-        # Releases reserved compute instances bottom-up
-        print("Rollback: Releasing reserved nodes...")
-```
-
----
-
-### 4. Human Approval Gates & Deferred Execution
-
-Pause turn execution for sensitive operations and wait for human operator intervention:
-
-```python
-from pydantic_ai_durable import approval_gate, DurableHarness
-
-# Intercept sensitive actions and generate challenge token
-@approval_gate(description="Approve database migration on production")
-async def drop_production_table(table_name: str) -> str:
-    return f"Dropped {table_name}"
-
-# The agent turn pauses with TaskStatus.WAITING ("waiting_approval").
-# External operator approves via API or TUI:
-await harness.resolve_approval(
-    token=challenge_token,
-    approved=True,
-    override_args={"table_name": "users_backup"},  # Optional parameter rewrite
-)
-
-# Resumes execution seamlessly!
-```
-
----
-
-### 5. Multi-Conversation Branching (Forking)
-
-Branch a conversation off any historical message in `O(1)` time without duplicating database rows:
-
-```python
-# Fork off specific answer entry
-thread = await conv.fork(
-    entry_id=entry.entry_id,
-    new_conversation_id="conv-speculation-1",
-)
-
-# Both proceed concurrently with zero interference
-await asyncio.gather(
-    conv.run("Proceed with standard rollout"),
-    thread.run("What happens if we roll back immediately?"),
-)
-```
-
----
-
-### 6. Real-Time Multiplayer Streaming & View State
-
-Connect TUIs, web dashboards, and mobile clients with reactive state subscriptions:
-
-```python
-# Obtain reactive view state observable
-view = await harness.view_state()
-
-print("Current turn count:", len(view.value.transcript))
-
-# Subscribe to real-time incremental updates
-unsubscribe = view.subscribe(lambda state: print("Updated active tasks:", state.active_tasks))
-
-# Or consume high-level agent event stream
-async for event in harness.watch_events():
-    print(f"[{event.event_type}] {event.payload}")
-```
-
----
-
-## Comparison with Pi Durable (`@earendil-works/pi-durable`)
-
-`pydantic-ai-durable` brings every architectural pillar from Earendil's TypeScript framework to Python and PydanticAI:
+`pydantic-ai-durable` brings 100% of Earendil's TypeScript framework to Python and PydanticAI:
 
 | Architectural Pillar | Pi Durable (TypeScript) | PyA Durable (Python) | Status |
 | :--- | :--- | :--- | :---: |
 | **Model Providers & Auth** | `createModels()` + `setProvider()` | `create_models()` + `*_provider()` | Complete |
 | **Harness Bootstrap** | `Harness.open()` + `resume()` | `Harness.open()` + `resume()` | Complete |
-| **Storage Engine** | Node SQLite WAL / DO | `AioSqliteStorage` (WAL mode) | Complete |
+| **Storage Engine** | Node SQLite WAL / DO | `SqliteStorage` (WAL mode) | Complete |
 | **Zero-Disk Storage** | `MemoryStorage` | `MemoryStorage` | Complete |
 | **Append-Only Ledger** | `JsonlStorage` | `JsonlStorage` | Complete |
 | **Turn Execution Loop** | Durable Engine Loop | `DurableStepEngine` on `Agent.iter()` | Complete |
@@ -287,7 +276,7 @@ async for event in harness.watch_events():
 
 ---
 
-## Testing & Verification
+## 🧪 Testing & Verification
 
 Every pull request is verified across unit test suites, real AI provider evaluations, and end-to-end user journeys:
 
@@ -312,4 +301,4 @@ uv run python scripts/true_user_tour.py
 
 ## License
 
-MIT License. Designed with human-first clarity and pragmatism.
+MIT License. Designed with human-first clarity, pragmatism, and high focus.
