@@ -278,23 +278,20 @@ audit_storage = JsonlStorage("audit_trail.jsonl")
 
 ## 🧪 Testing & Verification
 
-Every pull request is verified across unit test suites, real AI provider evaluations, and end-to-end user journeys:
+Every pull request is verified across unit test suites, and real AI provider evaluations:
 
 ```bash
 # Run 148 unit & behavioral tests
 uv run pytest
 
 # Run the 9 core behavioral evaluations (high-fidelity fallback)
-uv run python scripts/run_evals.py
+uv run python evals/run_evals.py
 
 # Run evaluations with OpenRouter & GPT-6 Luna
-OPENROUTER_API_KEY=sk-or-v1-... uv run python scripts/run_evals.py
+OPENROUTER_API_KEY=sk-or-v1-... uv run python evals/run_evals.py
 
 # Or specify model shortcuts directly
-uv run python scripts/run_evals.py --model "gpt-luna 6"
-
-# Run the true user tour across 8 real-world developer scenarios
-uv run python scripts/true_user_tour.py
+uv run python evals/run_evals.py --model "gpt-luna 6"
 ```
 
 ---

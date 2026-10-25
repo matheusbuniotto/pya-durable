@@ -3,6 +3,8 @@ name = "pydantic-ai-durable"
 version = "0.1.0"
 description = "Crash-resilient, durable agent harness for PydanticAI"
 readme = "README.md"
+keywords = ["pydantic-ai", "agents", "durable-execution", "llm", "ai-agents", "sqlite", "crash-recovery", "workflow"]
+classifiers = ["Programming Language :: Python :: 3", "Framework :: Pydantic", "Topic :: Software Development :: Libraries", "Intended Audience :: Developers"]
 requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.10.0",
@@ -26,8 +28,3 @@ packages = ["src/pya_durable", "src/pydantic_ai_durable"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-
-[dependency-groups]
-dev = [
-    "pillow>=12.3.0",
-]
